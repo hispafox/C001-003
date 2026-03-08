@@ -394,17 +394,16 @@ print(saludar("Desarrollador"))
     function downloadFile(content, filename, mimeType) {
         let finalContent = content;
         if (mimeType === 'text/html') {
-            finalContent = `<!DOCTYPE html>
-<html lang="es">
-<head><meta charset="UTF-8"><title>Documento</title>
-<style>body{font-family:system-ui,sans-serif;max-width:800px;margin:40px auto;padding:0 20px;line-height:1.7;}
-code{background:#f3f4f6;padding:2px 6px;border-radius:4px;}
-pre{background:#1e1e2e;color:#cdd6f4;padding:16px;border-radius:8px;overflow-x:auto;}
-pre code{background:none;color:inherit;padding:0;}
-table{border-collapse:collapse;width:100%;}th,td{border:1px solid #d1d5db;padding:8px 12px;}
-th{background:#f3f4f6;}blockquote{border-left:4px solid #7c3aed;padding:8px 16px;background:#f5f3ff;}
-img{max-width:100%;}</style></head>
-<body>${content}</body></html>`;
+            finalContent = '<!DOCTYPE html>' +
+                '<html lang="es"><head><meta charset="UTF-8"><title>Documento<\/title>' +
+                '<style>body{font-family:system-ui,sans-serif;max-width:800px;margin:40px auto;padding:0 20px;line-height:1.7;}' +
+                'code{background:#f3f4f6;padding:2px 6px;border-radius:4px;}' +
+                'pre{background:#1e1e2e;color:#cdd6f4;padding:16px;border-radius:8px;overflow-x:auto;}' +
+                'pre code{background:none;color:inherit;padding:0;}' +
+                'table{border-collapse:collapse;width:100%;}th,td{border:1px solid #d1d5db;padding:8px 12px;}' +
+                'th{background:#f3f4f6;}blockquote{border-left:4px solid #7c3aed;padding:8px 16px;background:#f5f3ff;}' +
+                'img{max-width:100%;}<\/style><\/head>' +
+                '<body>' + content + '<\/body><\/html>';
         }
         const blob = new Blob([finalContent], { type: mimeType + ';charset=utf-8' });
         const url = URL.createObjectURL(blob);
