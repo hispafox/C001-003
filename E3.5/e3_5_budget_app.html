@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>E3.5 — Presupuesto Personal</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+        body{font-family:'Segoe UI',system-ui,sans-serif;background:#0a0e1a;color:#e2e8f0;min-height:100vh;padding:20px}
+        .container{max-width:900px;margin:0 auto}
+        h1{text-align:center;font-size:22px;margin-bottom:4px;background:linear-gradient(135deg,#60a5fa,#a78bfa);-webkit-background-clip:text;-webkit-text-fill-color:transparent;font-weight:800}
+        .subtitle{text-align:center;color:#64748b;font-size:13px;margin-bottom:20px}
+
+        /* Summary cards */
+        .summary{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px}
+        .sum-card{background:#131a2e;border:1px solid #1e2d4a;border-radius:12px;padding:16px;text-align:center}
+        .sum-card .label{font-size:12px;color:#64748b;text-transform:uppercase;letter-spacing:1px}
+        .sum-card .value{font-size:28px;font-weight:800;font-family:'Fira Code',monospace;margin-top:4px}
+        .sum-card .value.positive{color:#22c55e}
+        .sum-card .value.negative{color:#ef4444}
+        .sum-card .value.balance{color:#60a5fa}
+
+        .card{background:#131a2e;border:1px solid #1e2d4a;border-radius:12px;padding:20px;margin-bottom:12px}
+        .card h2{font-size:12px;color:#64748b;text-transform:uppercase;letter-spacing:1px;margin-bottom:12px}
+
+        /* Form */
+        .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+        .form-grid.full{grid-template-columns:1fr}
+        .form-input{background:#0f172a;color:#e2e8f0;border:1px solid #334155;border-radius:8px;padding:8px 12px;font-size:13px;outline:none;width:100%;font-family:inherit}
+        .form-input:focus{border-color:#3b82f6}
+        .form-input option{background:#0f172a}
+        .btn{background:#1e293b;color:#94a3b8;border:1px solid #334155;border-radius:8px;padding:8px 16px;font-size:13px;cursor:pointer;transition:all .15s;font-weight:600}
+        .btn:hover{border-color:#3b82f6;color:#e2e8f0}
+        .btn-add{background:linear-gradient(135deg,#3b82f6,#8b5cf6);border:none;color:white;width:100%;margin-top:8px}
+
+        /* Filters */
+        .filters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+
+        /* Transaction list */
+        .tx-list{max-height:300px;overflow-y:auto}
+        .tx-item{display:flex;align-items:center;gap:10px;padding:10px;border-bottom:1px solid #1e2d4a;transition:background .15s}
+        .tx-item:hover{background:rgba(59,130,246,.05)}
+        .tx-icon{width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+        .tx-info{flex:1;min-width:0}
+        .tx-desc{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+        .tx-meta{font-size:11px;color:#64748b}
+        .tx-amount{font-size:16px;font-weight:700;font-family:'Fira Code',monospace;flex-shrink:0}
+        .tx-amount.income{color:#22c55e}
+        .tx-amount.expense{color:#ef4444}
+        .tx-delete{background:none;border:none;color:#475569;cursor:pointer;font-size:14px;padding:4px 8px;border-radius:4px}
+        .tx-delete:hover{color:#ef4444;background:rgba(239,68,68,.1)}
+
+        /* Charts */
+        .charts-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+        .chart-box{background:#131a2e;border:1px solid #1e2d4a;border-radius:12px;padding:16px}
+        .chart-box h3{font-size:11px;color:#475569;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px}
+        .chart-container{position:relative;height:220px}
+
+        @media(max-width:600px){.summary{grid-template-columns:1fr}.charts-grid{grid-template-columns:1fr}.form-grid{grid-template-columns:1fr}}
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>💰 Presupuesto Personal</h1>
+    <p class="subtitle">Controla tus ingresos y gastos — Cadena de Prompts</p>
+
+    <div class="summary">
+        <div class="sum-card"><div class="label">Balance</div><div class="value balance" id="balance">€0</div></div>
+        <div class="sum-card"><div class="label">Ingresos</div><div class="value positive" id="totalIncome">€0</div></div>
+        <div class="sum-card"><div class="label">Gastos</div><div class="value negative" id="totalExpense">€0</div></div>
+    </div>
+
+    <!-- Add form -->
+    <div class="card">
+        <h2>Añadir Transacción</h2>
+        <div class="form-grid">
+            <input class="form-input" id="txDesc" placeholder="Descripción">
+            <input class="form-input" id="txAmount" type="number" step="0.01" min="0.01" placeholder="Cantidad (€)">
+            <select class="form-input" id="txType" onchange="updateCategories()">
+                <option value="expense">Gasto</option>
+                <option value="income">Ingreso</option>
+            </select>
+            <select class="form-input" id="txCat"></select>
+            <input class="form-input" id="txDate" type="date">
+        </div>
+        <button class="btn btn-add" onclick="addTransaction()">+ Añadir</button>
+    </div>
+
+    <!-- Charts -->
+    <div class="charts-grid">
+        <div class="chart-box"><h3>Gastos por Categoría</h3><div class="chart-container"><canvas id="doughnutChart"></canvas></div></div>
+        <div class="chart-box"><h3>Ingresos vs Gastos (6 meses)</h3><div class="chart-container"><canvas id="barChart"></canvas></div></div>
+    </div>
+
+    <!-- Transactions -->
+    <div class="card">
+        <h2>Transacciones</h2>
+        <div class="filters">
+            <select class="form-input" id="filterType" style="width:auto" onchange="renderList()">
+                <option value="all">Todos</option><option value="income">Ingresos</option><option value="expense">Gastos</option>
+            </select>
+            <select class="form-input" id="filterCat" style="width:auto" onchange="renderList()">
+                <option value="all">Todas las categorías</option>
+            </select>
+        </div>
+        <div class="tx-list" id="txList"></div>
+    </div>
+</div>
+
+<script>
+    var CATS_EXPENSE = ["Alimentación","Transporte","Vivienda","Ocio","Salud","Educación","Ropa","Otros"];
+    var CATS_INCOME = ["Salario","Freelance","Otros"];
+    var CAT_ICONS = {"Alimentación":"🍕","Transporte":"🚗","Vivienda":"🏠","Ocio":"🎮","Salud":"💊","Educación":"📚","Ropa":"👕","Otros":"📦","Salario":"💼","Freelance":"💻"};
+    var CAT_COLORS = {"Alimentación":"#ef4444","Transporte":"#f97316","Vivienda":"#eab308","Ocio":"#22c55e","Salud":"#06b6d4","Educación":"#3b82f6","Ropa":"#8b5cf6","Otros":"#64748b","Salario":"#22c55e","Freelance":"#10b981"};
+
+    var transactions = [];
+    var nextId = 1;
+
+    // Default date
+    document.getElementById("txDate").value = new Date().toISOString().split("T")[0];
+
+    function updateCategories() {
+        var type = document.getElementById("txType").value;
+        var cats = type === "income" ? CATS_INCOME : CATS_EXPENSE;
+        var sel = document.getElementById("txCat");
+        sel.innerHTML = cats.map(function(c) { return '<option value="' + c + '">' + c + '</option>'; }).join("");
+    }
+    updateCategories();
+
+    // Init with sample data
+    var samples = [
+        {type:"income",desc:"Salario marzo",amount:2500,cat:"Salario",date:"2026-03-01"},
+        {type:"income",desc:"Proyecto web",amount:800,cat:"Freelance",date:"2026-02-15"},
+        {type:"income",desc:"Salario febrero",amount:2500,cat:"Salario",date:"2026-02-01"},
+        {type:"expense",desc:"Supermercado",amount:85.50,cat:"Alimentación",date:"2026-03-05"},
+        {type:"expense",desc:"Gasolina",amount:60,cat:"Transporte",date:"2026-03-03"},
+        {type:"expense",desc:"Alquiler",amount:750,cat:"Vivienda",date:"2026-03-01"},
+        {type:"expense",desc:"Netflix + Spotify",amount:22.99,cat:"Ocio",date:"2026-03-01"},
+        {type:"expense",desc:"Farmacia",amount:15.80,cat:"Salud",date:"2026-02-28"},
+        {type:"expense",desc:"Curso Python",amount:49.99,cat:"Educación",date:"2026-02-20"},
+        {type:"expense",desc:"Restaurante",amount:42,cat:"Alimentación",date:"2026-02-18"},
+    ];
+    for (var i = 0; i < samples.length; i++) {
+        var s = samples[i];
+        transactions.push({id: nextId++, type: s.type, desc: s.desc, amount: s.amount, cat: s.cat, date: s.date});
+    }
+
+    function addTransaction() {
+        var desc = document.getElementById("txDesc").value.trim();
+        var amount = parseFloat(document.getElementById("txAmount").value);
+        var type = document.getElementById("txType").value;
+        var cat = document.getElementById("txCat").value;
+        var date = document.getElementById("txDate").value;
+        if (!desc || !amount || amount <= 0 || !date) return;
+
+        transactions.push({id: nextId++, type: type, desc: desc, amount: amount, cat: cat, date: date});
+        document.getElementById("txDesc").value = "";
+        document.getElementById("txAmount").value = "";
+        renderAll();
+    }
+
+    function removeTransaction(id) {
+        transactions = transactions.filter(function(t) { return t.id !== id; });
+        renderAll();
+    }
+
+    function renderAll() {
+        renderSummary();
+        renderList();
+        renderCharts();
+        updateFilterCats();
+    }
+
+    function renderSummary() {
+        var inc = 0, exp = 0;
+        for (var i = 0; i < transactions.length; i++) {
+            if (transactions[i].type === "income") inc += transactions[i].amount;
+            else exp += transactions[i].amount;
+        }
+        document.getElementById("balance").textContent = "€" + (inc - exp).toFixed(2);
+        document.getElementById("totalIncome").textContent = "€" + inc.toFixed(2);
+        document.getElementById("totalExpense").textContent = "€" + exp.toFixed(2);
+    }
+
+    function renderList() {
+        var filterType = document.getElementById("filterType").value;
+        var filterCat = document.getElementById("filterCat").value;
+        var filtered = transactions.filter(function(t) {
+            if (filterType !== "all" && t.type !== filterType) return false;
+            if (filterCat !== "all" && t.cat !== filterCat) return false;
+            return true;
+        });
+        filtered.sort(function(a, b) { return b.date.localeCompare(a.date); });
+
+        var html = "";
+        for (var i = 0; i < filtered.length; i++) {
+            var t = filtered[i];
+            var icon = CAT_ICONS[t.cat] || "📦";
+            var color = CAT_COLORS[t.cat] || "#64748b";
+            var sign = t.type === "income" ? "+" : "-";
+            html += '<div class="tx-item">' +
+                '<div class="tx-icon" style="background:' + color + '22">' + icon + '</div>' +
+                '<div class="tx-info"><div class="tx-desc">' + escHtml(t.desc) + '</div><div class="tx-meta">' + t.cat + ' · ' + t.date + '</div></div>' +
+                '<div class="tx-amount ' + t.type + '">' + sign + '€' + t.amount.toFixed(2) + '</div>' +
+                '<button class="tx-delete" onclick="removeTransaction(' + t.id + ')">✕</button></div>';
+        }
+        document.getElementById("txList").innerHTML = html || '<div style="text-align:center;color:#475569;padding:20px">Sin transacciones</div>';
+    }
+
+    function updateFilterCats() {
+        var cats = {};
+        for (var i = 0; i < transactions.length; i++) cats[transactions[i].cat] = true;
+        var sel = document.getElementById("filterCat");
+        var val = sel.value;
+        sel.innerHTML = '<option value="all">Todas</option>' + Object.keys(cats).map(function(c) { return '<option value="' + c + '">' + c + '</option>'; }).join("");
+        sel.value = val;
+    }
+
+    // ═══════════════════════════════════════════════
+    // CHARTS
+    // ═══════════════════════════════════════════════
+
+    var doughnutInst = null, barInst = null;
+
+    function renderCharts() {
+        if (typeof Chart === "undefined") return;
+
+        // Doughnut: expenses by category
+        var expByCat = {};
+        for (var i = 0; i < transactions.length; i++) {
+            if (transactions[i].type === "expense") {
+                expByCat[transactions[i].cat] = (expByCat[transactions[i].cat] || 0) + transactions[i].amount;
+            }
+        }
+        var cats = Object.keys(expByCat);
+        var vals = cats.map(function(c) { return expByCat[c]; });
+        var colors = cats.map(function(c) { return CAT_COLORS[c] || "#64748b"; });
+
+        var ctx1 = document.getElementById("doughnutChart").getContext("2d");
+        if (doughnutInst) doughnutInst.destroy();
+        doughnutInst = new Chart(ctx1, {
+            type: "doughnut",
+            data: { labels: cats, datasets: [{ data: vals, backgroundColor: colors, borderWidth: 0 }] },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: "#94a3b8", font: { size: 11 } }, position: "bottom" } } }
+        });
+
+        // Bar: income vs expense last 6 months
+        var now = new Date();
+        var months = [];
+        var incByMonth = {}, expByMonth = {};
+        for (var m = 5; m >= 0; m--) {
+            var d = new Date(now.getFullYear(), now.getMonth() - m, 1);
+            var key = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0");
+            months.push(key);
+            incByMonth[key] = 0; expByMonth[key] = 0;
+        }
+        for (var i = 0; i < transactions.length; i++) {
+            var mk = transactions[i].date.substring(0, 7);
+            if (transactions[i].type === "income" && incByMonth[mk] !== undefined) incByMonth[mk] += transactions[i].amount;
+            if (transactions[i].type === "expense" && expByMonth[mk] !== undefined) expByMonth[mk] += transactions[i].amount;
+        }
+
+        var ctx2 = document.getElementById("barChart").getContext("2d");
+        if (barInst) barInst.destroy();
+        barInst = new Chart(ctx2, {
+            type: "bar",
+            data: {
+                labels: months,
+                datasets: [
+                    { label: "Ingresos", data: months.map(function(m) { return incByMonth[m]; }), backgroundColor: "#22c55eaa", borderRadius: 4 },
+                    { label: "Gastos", data: months.map(function(m) { return expByMonth[m]; }), backgroundColor: "#ef4444aa", borderRadius: 4 }
+                ]
+            },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: "#94a3b8" } } }, scales: { x: { ticks: { color: "#64748b" }, grid: { color: "#1e2d4a" } }, y: { ticks: { color: "#64748b", callback: function(v) { return "€" + v; } }, grid: { color: "#1e2d4a" } } } }
+        });
+    }
+
+    function escHtml(s) { return s.replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+
+    renderAll();
+</script>
+</body>
+</html>

@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>E3.6 — Dashboard de Analytics</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+        body{font-family:'Segoe UI',system-ui,sans-serif;background:#0a0e1a;color:#e2e8f0;min-height:100vh;padding:16px}
+        .container{max-width:1000px;margin:0 auto}
+        h1{text-align:center;font-size:22px;margin-bottom:4px;background:linear-gradient(135deg,#60a5fa,#a78bfa);-webkit-background-clip:text;-webkit-text-fill-color:transparent;font-weight:800}
+        .subtitle{text-align:center;color:#64748b;font-size:13px;margin-bottom:16px}
+
+        /* KPIs */
+        .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px}
+        .kpi{background:#131a2e;border:1px solid #1e2d4a;border-radius:10px;padding:14px;text-align:center}
+        .kpi .label{font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:.5px}
+        .kpi .val{font-size:26px;font-weight:800;font-family:'Fira Code',monospace;margin-top:2px}
+
+        /* Controls */
+        .controls{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px;background:#131a2e;border:1px solid #1e2d4a;border-radius:10px;padding:10px 14px}
+        .ctrl-label{font-size:11px;color:#64748b;text-transform:uppercase;margin-right:4px}
+        .chip{display:inline-flex;align-items:center;gap:3px;padding:3px 10px;border-radius:14px;font-size:11px;cursor:pointer;border:1px solid #334155;background:#0f172a;color:#94a3b8;transition:all .15s;user-select:none}
+        .chip.on{border-color:var(--c,#3b82f6);background:var(--bg,rgba(59,130,246,.15));color:var(--c,#60a5fa)}
+        .chip .dot{width:7px;height:7px;border-radius:50%}
+        .btn{background:#1e293b;color:#94a3b8;border:1px solid #334155;border-radius:6px;padding:5px 12px;font-size:12px;cursor:pointer;font-weight:600;transition:all .15s}
+        .btn:hover{border-color:#3b82f6;color:#e2e8f0}
+        .btn-go{background:linear-gradient(135deg,#3b82f6,#8b5cf6);border:none;color:white}
+        .toggle{display:flex;align-items:center;gap:4px;font-size:12px;color:#64748b;cursor:pointer}
+        .toggle input{accent-color:#3b82f6}
+
+        /* Charts */
+        .charts-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
+        .chart-card{background:#131a2e;border:1px solid #1e2d4a;border-radius:10px;padding:14px}
+        .chart-card h3{font-size:11px;color:#475569;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px}
+        .chart-wrap{position:relative;height:200px}
+
+        /* Alerts */
+        .alerts-card{background:#131a2e;border:1px solid #1e2d4a;border-radius:10px;padding:14px}
+        .alerts-card h3{font-size:11px;color:#475569;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px}
+        .alert-item{padding:8px 10px;border-radius:6px;margin-bottom:6px;font-size:13px;display:flex;align-items:center;gap:8px}
+        .alert-crit{background:rgba(239,68,68,.1);border-left:3px solid #ef4444}
+        .alert-warn{background:rgba(234,179,8,.1);border-left:3px solid #eab308}
+        .alert-ok{background:rgba(34,197,94,.1);border-left:3px solid #22c55e;color:#86efac}
+
+        @media(max-width:700px){.kpis{grid-template-columns:repeat(2,1fr)}.charts-grid{grid-template-columns:1fr}}
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>📊 Log Analytics Dashboard</h1>
+    <p class="subtitle">Monitorización de servidores — Integración de todas las técnicas</p>
+
+    <div class="kpis">
+        <div class="kpi"><div class="label">Total Logs</div><div class="val" id="kTotal" style="color:#60a5fa">0</div></div>
+        <div class="kpi"><div class="label">Errores</div><div class="val" id="kErrors" style="color:#ef4444">0</div></div>
+        <div class="kpi"><div class="label">Error Rate</div><div class="val" id="kRate" style="color:#f97316">0%</div></div>
+        <div class="kpi"><div class="label">Alertas</div><div class="val" id="kAlerts" style="color:#eab308">0</div></div>
+    </div>
+
+    <div class="controls">
+        <span class="ctrl-label">Nivel:</span>
+        <div id="levelFilters"></div>
+        <span class="ctrl-label" style="margin-left:8px">Fuente:</span>
+        <div id="sourceFilters"></div>
+        <button class="btn btn-go" onclick="simulate(10)">+ 10 Logs</button>
+        <label class="toggle"><input type="checkbox" id="autoRefresh" onchange="toggleAuto()"> Auto 5s</label>
+    </div>
+
+    <div class="charts-grid">
+        <div class="chart-card"><h3>Logs por Hora (24h)</h3><div class="chart-wrap"><canvas id="lineChart"></canvas></div></div>
+        <div class="chart-card"><h3>Distribución por Nivel</h3><div class="chart-wrap"><canvas id="doughnutChart"></canvas></div></div>
+        <div class="chart-card"><h3>Top 5 IPs con Errores</h3><div class="chart-wrap"><canvas id="barIPs"></canvas></div></div>
+        <div class="chart-card"><h3>Logs por Fuente</h3><div class="chart-wrap"><canvas id="barSources"></canvas></div></div>
+    </div>
+
+    <div class="alerts-card">
+        <h3>Alertas Activas</h3>
+        <div id="alertsList"></div>
+    </div>
+</div>
+
+<script>
+    var LEVELS = ["DEBUG","INFO","WARNING","ERROR","CRITICAL"];
+    var SOURCES = ["web","api","db","auth","cache"];
+    var LEVEL_COLORS = {DEBUG:"#64748b",INFO:"#3b82f6",WARNING:"#eab308",ERROR:"#ef4444",CRITICAL:"#dc2626"};
+    var SOURCE_COLORS = {web:"#3b82f6",api:"#22c55e",db:"#f97316",auth:"#a855f7",cache:"#06b6d4"};
+    var IPS = ["192.168.1.10","10.0.0.5","203.0.113.50","172.16.0.8","10.0.0.15","192.168.1.20","10.0.0.25","172.16.0.12"];
+    var MESSAGES = ["Request processed","Connection timeout","Slow query","Failed login","Cache miss","Rate limit","Deadlock","Pool exhausted","Replication lag","Health check OK"];
+
+    var logs = [];
+    var filterLevels = {}, filterSources = {};
+    LEVELS.forEach(function(l){filterLevels[l]=true;});
+    SOURCES.forEach(function(s){filterSources[s]=true;});
+    var autoTimer = null;
+    var charts = {};
+
+    // Generate initial 200 logs
+    function initLogs() {
+        var now = Date.now();
+        for (var i = 0; i < 200; i++) {
+            var ts = new Date(now - Math.random() * 24 * 3600000);
+            var lvlRand = Math.random();
+            var level = lvlRand < 0.05 ? "CRITICAL" : lvlRand < 0.15 ? "ERROR" : lvlRand < 0.25 ? "WARNING" : lvlRand < 0.35 ? "DEBUG" : "INFO";
+            logs.push({
+                timestamp: ts.toISOString(),
+                hour: ts.getHours(),
+                level: level,
+                source: SOURCES[Math.floor(Math.random()*SOURCES.length)],
+                ip: IPS[Math.floor(Math.random()*IPS.length)],
+                message: MESSAGES[Math.floor(Math.random()*MESSAGES.length)]
+            });
+        }
+    }
+
+    function simulate(n) {
+        var now = Date.now();
+        for (var i = 0; i < n; i++) {
+            var ts = new Date(now - Math.random() * 3600000);
+            var lvlRand = Math.random();
+            var level = lvlRand < 0.08 ? "CRITICAL" : lvlRand < 0.2 ? "ERROR" : lvlRand < 0.35 ? "WARNING" : lvlRand < 0.45 ? "DEBUG" : "INFO";
+            logs.push({timestamp:ts.toISOString(),hour:ts.getHours(),level:level,source:SOURCES[Math.floor(Math.random()*SOURCES.length)],ip:IPS[Math.floor(Math.random()*IPS.length)],message:MESSAGES[Math.floor(Math.random()*MESSAGES.length)]});
+        }
+        renderAll();
+    }
+
+    function getFiltered() {
+        return logs.filter(function(l) { return filterLevels[l.level] && filterSources[l.source]; });
+    }
+
+    function toggleAuto() {
+        if (document.getElementById("autoRefresh").checked) {
+            autoTimer = setInterval(function() { simulate(5); }, 5000);
+        } else { clearInterval(autoTimer); autoTimer = null; }
+    }
+
+    // ═══════════════════════════════════════════════
+    // RENDERING
+    // ═══════════════════════════════════════════════
+
+    function renderFilters() {
+        var lf = document.getElementById("levelFilters");
+        lf.innerHTML = LEVELS.map(function(l) {
+            var on = filterLevels[l] ? " on" : "";
+            return '<span class="chip' + on + '" style="--c:' + LEVEL_COLORS[l] + ';--bg:' + LEVEL_COLORS[l] + '22" onclick="filterLevels[\'' + l + '\']=!filterLevels[\'' + l + '\'];renderAll()"><span class="dot" style="background:' + LEVEL_COLORS[l] + '"></span>' + l + '</span>';
+        }).join("");
+        var sf = document.getElementById("sourceFilters");
+        sf.innerHTML = SOURCES.map(function(s) {
+            var on = filterSources[s] ? " on" : "";
+            return '<span class="chip' + on + '" style="--c:' + SOURCE_COLORS[s] + ';--bg:' + SOURCE_COLORS[s] + '22" onclick="filterSources[\'' + s + '\']=!filterSources[\'' + s + '\'];renderAll()"><span class="dot" style="background:' + SOURCE_COLORS[s] + '"></span>' + s + '</span>';
+        }).join("");
+    }
+
+    function renderKPIs() {
+        var f = getFiltered();
+        var errors = f.filter(function(l) { return l.level === "ERROR" || l.level === "CRITICAL"; }).length;
+        var rate = f.length > 0 ? (errors / f.length * 100) : 0;
+        document.getElementById("kTotal").textContent = f.length;
+        document.getElementById("kErrors").textContent = errors;
+        document.getElementById("kRate").textContent = rate.toFixed(1) + "%";
+
+        // Alerts
+        var alerts = [];
+        if (rate > 15) alerts.push({sev:"CRITICAL",msg:"Error rate " + rate.toFixed(1) + "% > 15%"});
+        if (errors > 50) alerts.push({sev:"WARNING",msg:errors + " errores > 50"});
+        var dbErr = f.filter(function(l){return l.source==="db"&&(l.level==="ERROR"||l.level==="CRITICAL");}).length;
+        if (dbErr > 10) alerts.push({sev:"CRITICAL",msg:dbErr + " errores en DB > 10"});
+        var critCount = f.filter(function(l){return l.level==="CRITICAL";}).length;
+        if (critCount > 5) alerts.push({sev:"CRITICAL",msg:critCount + " logs CRITICAL > 5"});
+        // IP check
+        var ipCounts = {};
+        f.forEach(function(l) { if (l.level==="ERROR"||l.level==="CRITICAL") { ipCounts[l.ip]=(ipCounts[l.ip]||0)+1; } });
+        for (var ip in ipCounts) { if (ipCounts[ip] > 20) alerts.push({sev:"WARNING",msg:"IP " + ip + " con " + ipCounts[ip] + " errores"}); }
+
+        document.getElementById("kAlerts").textContent = alerts.length;
+        var al = document.getElementById("alertsList");
+        if (alerts.length === 0) {
+            al.innerHTML = '<div class="alert-item alert-ok">✅ Sin alertas activas — sistema estable</div>';
+        } else {
+            al.innerHTML = alerts.map(function(a) {
+                var cls = a.sev === "CRITICAL" ? "alert-crit" : "alert-warn";
+                var icon = a.sev === "CRITICAL" ? "🔴" : "🟡";
+                return '<div class="alert-item ' + cls + '">' + icon + ' [' + a.sev + '] ' + a.msg + '</div>';
+            }).join("");
+        }
+    }
+
+    function renderCharts() {
+        if (typeof Chart === "undefined") return;
+        var f = getFiltered();
+
+        // Line: logs per hour
+        var byHour = {};
+        for (var h = 0; h < 24; h++) byHour[h] = {DEBUG:0,INFO:0,WARNING:0,ERROR:0,CRITICAL:0};
+        f.forEach(function(l) { if (byHour[l.hour]) byHour[l.hour][l.level]++; });
+        var labels = []; for (var h = 0; h < 24; h++) labels.push(String(h).padStart(2,"0") + ":00");
+
+        if (charts.line) charts.line.destroy();
+        charts.line = new Chart(document.getElementById("lineChart").getContext("2d"), {
+            type: "line",
+            data: { labels: labels, datasets: LEVELS.map(function(lvl) {
+                return { label: lvl, data: labels.map(function(_,h){return byHour[h][lvl];}), borderColor: LEVEL_COLORS[lvl], backgroundColor: LEVEL_COLORS[lvl] + "22", fill: true, tension: 0.3, pointRadius: 0, borderWidth: 2 };
+            })},
+            options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{labels:{color:"#94a3b8",font:{size:10}},position:"bottom"}}, scales:{x:{ticks:{color:"#475569",font:{size:9},maxTicksLimit:12},grid:{color:"#1e2d4a"}},y:{ticks:{color:"#475569"},grid:{color:"#1e2d4a"}}} }
+        });
+
+        // Doughnut: by level
+        var lvlCounts = {};
+        LEVELS.forEach(function(l){lvlCounts[l]=0;});
+        f.forEach(function(l){lvlCounts[l.level]++;});
+        if (charts.doughnut) charts.doughnut.destroy();
+        charts.doughnut = new Chart(document.getElementById("doughnutChart").getContext("2d"), {
+            type: "doughnut",
+            data: { labels: LEVELS, datasets: [{ data: LEVELS.map(function(l){return lvlCounts[l];}), backgroundColor: LEVELS.map(function(l){return LEVEL_COLORS[l];}), borderWidth: 0 }] },
+            options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{labels:{color:"#94a3b8",font:{size:10}},position:"bottom"}} }
+        });
+
+        // Bar: top IPs with errors
+        var ipErr = {};
+        f.forEach(function(l){ if (l.level==="ERROR"||l.level==="CRITICAL") ipErr[l.ip]=(ipErr[l.ip]||0)+1; });
+        var topIPs = Object.entries(ipErr).sort(function(a,b){return b[1]-a[1];}).slice(0,5);
+        if (charts.barIP) charts.barIP.destroy();
+        charts.barIP = new Chart(document.getElementById("barIPs").getContext("2d"), {
+            type: "bar",
+            data: { labels: topIPs.map(function(x){return x[0];}), datasets: [{data:topIPs.map(function(x){return x[1];}),backgroundColor:"#ef4444aa",borderRadius:4}] },
+            options: { indexAxis:"y", responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{x:{ticks:{color:"#475569"},grid:{color:"#1e2d4a"}},y:{ticks:{color:"#e2e8f0",font:{size:10}},grid:{display:false}}} }
+        });
+
+        // Bar: by source
+        var srcCounts = {};
+        SOURCES.forEach(function(s){srcCounts[s]=0;});
+        f.forEach(function(l){srcCounts[l.source]++;});
+        if (charts.barSrc) charts.barSrc.destroy();
+        charts.barSrc = new Chart(document.getElementById("barSources").getContext("2d"), {
+            type: "bar",
+            data: { labels: SOURCES, datasets: [{data:SOURCES.map(function(s){return srcCounts[s];}),backgroundColor:SOURCES.map(function(s){return SOURCE_COLORS[s]+"cc";}),borderRadius:4}] },
+            options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{x:{ticks:{color:"#e2e8f0"},grid:{display:false}},y:{ticks:{color:"#475569"},grid:{color:"#1e2d4a"}}} }
+        });
+    }
+
+    function renderAll() { renderFilters(); renderKPIs(); renderCharts(); }
+
+    initLogs();
+    renderAll();
+</script>
+</body>
+</html>
