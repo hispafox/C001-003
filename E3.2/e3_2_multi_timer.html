@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>E3.2 — Cronómetro Multi-Timer</title>
+    <style>
+        *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+        body{font-family:'Segoe UI',system-ui,sans-serif;background:#0a0e1a;color:#e2e8f0;min-height:100vh;padding:20px}
+        .container{max-width:800px;margin:0 auto}
+        h1{text-align:center;font-size:22px;margin-bottom:4px;background:linear-gradient(135deg,#60a5fa,#a78bfa);-webkit-background-clip:text;-webkit-text-fill-color:transparent;font-weight:800}
+        .subtitle{text-align:center;color:#64748b;font-size:13px;margin-bottom:20px}
+
+        .top-bar{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-bottom:16px}
+        .btn{background:#1e293b;color:#94a3b8;border:1px solid #334155;border-radius:8px;padding:8px 16px;font-size:13px;cursor:pointer;transition:all .15s;font-weight:600}
+        .btn:hover{border-color:#3b82f6;color:#e2e8f0}
+        .btn-accent{background:linear-gradient(135deg,#3b82f6,#8b5cf6);border:none;color:white}
+        .btn-accent:hover{box-shadow:0 0 16px rgba(59,130,246,.3)}
+        .btn-preset{background:#131a2e;border-color:#1e2d4a;font-size:12px;padding:6px 12px}
+
+        .global-time{text-align:center;font-family:'Fira Code',monospace;font-size:14px;color:#64748b;margin-bottom:16px}
+        .global-time span{color:#60a5fa;font-weight:700}
+
+        .timers-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+
+        .timer-card{background:#131a2e;border:2px solid #1e2d4a;border-radius:12px;padding:16px;position:relative;transition:border-color .3s}
+        .timer-card.running{border-color:#22c55e}
+        .timer-card.alarming{border-color:#ef4444;animation:alarmPulse .5s infinite}
+        @keyframes alarmPulse{0%,100%{box-shadow:0 0 0 rgba(239,68,68,0)}50%{box-shadow:0 0 20px rgba(239,68,68,.4)}}
+
+        .timer-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+        .timer-name{background:transparent;border:none;color:#e2e8f0;font-size:14px;font-weight:700;outline:none;border-bottom:1px solid transparent;padding:2px 4px;max-width:180px}
+        .timer-name:focus{border-bottom-color:#3b82f6}
+        .timer-delete{background:none;border:none;color:#475569;font-size:18px;cursor:pointer;padding:2px 6px;border-radius:4px}
+        .timer-delete:hover{color:#ef4444;background:rgba(239,68,68,.1)}
+
+        .timer-display{font-family:'Fira Code',monospace;font-size:36px;text-align:center;font-weight:700;letter-spacing:2px;margin-bottom:4px;color:#e2e8f0;line-height:1.2}
+        .timer-ms{font-size:18px;color:#64748b}
+
+        .timer-mode{display:flex;gap:4px;justify-content:center;margin-bottom:10px}
+        .mode-btn{background:#0f172a;color:#64748b;border:1px solid #334155;border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;transition:all .15s}
+        .mode-btn.active{background:#3b82f6;color:white;border-color:#3b82f6}
+
+        .countdown-input{display:none;justify-content:center;gap:6px;margin-bottom:10px;align-items:center}
+        .countdown-input.visible{display:flex}
+        .countdown-input input{width:50px;background:#0f172a;color:#e2e8f0;border:1px solid #334155;border-radius:6px;padding:4px 8px;text-align:center;font-size:14px;font-family:'Fira Code',monospace;outline:none}
+        .countdown-input span{color:#64748b;font-size:12px}
+
+        .timer-buttons{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;margin-bottom:8px}
+        .tbtn{padding:6px 14px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;border:none;transition:all .15s}
+        .tbtn-start{background:#22c55e;color:white}
+        .tbtn-start:hover{background:#16a34a}
+        .tbtn-pause{background:#f97316;color:white}
+        .tbtn-pause:hover{background:#ea580c}
+        .tbtn-reset{background:#334155;color:#94a3b8}
+        .tbtn-reset:hover{background:#475569}
+        .tbtn-lap{background:#8b5cf6;color:white}
+        .tbtn-lap:hover{background:#7c3aed}
+
+        .laps{max-height:100px;overflow-y:auto;font-size:11px;color:#64748b}
+        .lap-item{display:flex;justify-content:space-between;padding:2px 4px;border-bottom:1px solid #1e2d4a}
+        .lap-item span:last-child{font-family:'Fira Code',monospace;color:#94a3b8}
+
+        .empty-state{text-align:center;color:#475569;padding:40px;font-size:14px;grid-column:1/-1}
+
+        @media(max-width:600px){.timers-grid{grid-template-columns:1fr}.timer-display{font-size:28px}}
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>⏱️ Multi-Timer</h1>
+    <p class="subtitle">Cronómetros y temporizadores simultáneos — Zero-shot prompt</p>
+
+    <div class="top-bar">
+        <button class="btn btn-accent" onclick="addTimer()">+ Nuevo Timer</button>
+        <button class="btn btn-preset" onclick="addPreset(25,0,'Pomodoro 25m')">🍅 Pomodoro 25m</button>
+        <button class="btn btn-preset" onclick="addPreset(5,0,'Descanso 5m')">☕ Descanso 5m</button>
+        <button class="btn btn-preset" onclick="addPreset(30,0,'Reunión 30m')">📅 Reunión 30m</button>
+        <button class="btn btn-preset" onclick="addPreset(60,0,'1 hora')">⏰ 1 hora</button>
+    </div>
+
+    <div class="global-time">Total acumulado: <span id="globalTime">00:00:00</span></div>
+
+    <div class="timers-grid" id="timersGrid">
+        <div class="empty-state">Pulsa "Nuevo Timer" o un preset para empezar</div>
+    </div>
+</div>
+
+<script>
+    var timers = [];
+    var nextId = 1;
+    var COLORS = ["#3b82f6","#22c55e","#f97316","#a855f7","#ef4444","#eab308","#06b6d4","#ec4899"];
+
+    function addTimer(mode, countdownSec, name) {
+        if (timers.length >= 8) { alert("Máximo 8 timers"); return; }
+        var id = nextId++;
+        var color = COLORS[(timers.length) % COLORS.length];
+        var t = {
+            id: id, name: name || "Timer " + id, color: color,
+            mode: mode || "up", // "up" or "down"
+            elapsed: 0, // ms for stopwatch
+            countdownTotal: (countdownSec || 0) * 1000, // ms for countdown
+            remaining: (countdownSec || 0) * 1000,
+            running: false, interval: null, alarming: false,
+            laps: [], lastLapTime: 0
+        };
+        timers.push(t);
+        renderAll();
+    }
+
+    function addPreset(min, sec, name) {
+        addTimer("down", min * 60 + sec, name);
+    }
+
+    function removeTimer(id) {
+        var t = getTimer(id);
+        if (t && t.interval) clearInterval(t.interval);
+        timers = timers.filter(function(x) { return x.id !== id; });
+        renderAll();
+    }
+
+    function getTimer(id) {
+        for (var i = 0; i < timers.length; i++) { if (timers[i].id === id) return timers[i]; }
+        return null;
+    }
+
+    function startTimer(id) {
+        var t = getTimer(id);
+        if (!t || t.running) return;
+
+        if (t.mode === "down" && t.remaining <= 0) {
+            // Read inputs
+            var mEl = document.getElementById("cdm-" + id);
+            var sEl = document.getElementById("cds-" + id);
+            if (mEl && sEl) {
+                var m = parseInt(mEl.value) || 0;
+                var s = parseInt(sEl.value) || 0;
+                t.countdownTotal = (m * 60 + s) * 1000;
+                t.remaining = t.countdownTotal;
+            }
+            if (t.remaining <= 0) return;
+        }
+
+        t.running = true;
+        t.alarming = false;
+        var lastTick = Date.now();
+
+        t.interval = setInterval(function() {
+            var now = Date.now();
+            var delta = now - lastTick;
+            lastTick = now;
+
+            if (t.mode === "up") {
+                t.elapsed += delta;
+            } else {
+                t.remaining -= delta;
+                if (t.remaining <= 0) {
+                    t.remaining = 0;
+                    pauseTimer(id);
+                    t.alarming = true;
+                    playBeep();
+                    updateTimerUI(id);
+                    return;
+                }
+            }
+            updateTimerUI(id);
+        }, 50);
+
+        updateTimerUI(id);
+    }
+
+    function pauseTimer(id) {
+        var t = getTimer(id);
+        if (!t) return;
+        t.running = false;
+        if (t.interval) { clearInterval(t.interval); t.interval = null; }
+        updateTimerUI(id);
+    }
+
+    function resetTimer(id) {
+        var t = getTimer(id);
+        if (!t) return;
+        pauseTimer(id);
+        t.elapsed = 0;
+        t.remaining = t.countdownTotal;
+        t.alarming = false;
+        t.laps = [];
+        t.lastLapTime = 0;
+        updateTimerUI(id);
+    }
+
+    function lapTimer(id) {
+        var t = getTimer(id);
+        if (!t || !t.running) return;
+        var current = t.mode === "up" ? t.elapsed : (t.countdownTotal - t.remaining);
+        var lapTime = current - t.lastLapTime;
+        t.lastLapTime = current;
+        t.laps.push({ num: t.laps.length + 1, total: current, lap: lapTime });
+        updateTimerUI(id);
+    }
+
+    function setMode(id, mode) {
+        var t = getTimer(id);
+        if (!t || t.running) return;
+        t.mode = mode;
+        resetTimer(id);
+        renderAll();
+    }
+
+    // ═══════════════════════════════════════════════
+    // RENDERING
+    // ═══════════════════════════════════════════════
+
+    function formatTime(ms) {
+        var totalSec = Math.floor(Math.abs(ms) / 1000);
+        var h = Math.floor(totalSec / 3600);
+        var m = Math.floor((totalSec % 3600) / 60);
+        var s = totalSec % 60;
+        var msRem = Math.floor((Math.abs(ms) % 1000) / 10);
+        return pad(h) + ":" + pad(m) + ":" + pad(s) + "." + pad(msRem);
+    }
+
+    function pad(n) { return n < 10 ? "0" + n : "" + n; }
+
+    function renderAll() {
+        var grid = document.getElementById("timersGrid");
+        grid.innerHTML = "";
+
+        if (timers.length === 0) {
+            grid.innerHTML = '<div class="empty-state">Pulsa "Nuevo Timer" o un preset para empezar</div>';
+            return;
+        }
+
+        for (var i = 0; i < timers.length; i++) {
+            var t = timers[i];
+            var ms = t.mode === "up" ? t.elapsed : t.remaining;
+            var cls = "timer-card" + (t.running ? " running" : "") + (t.alarming ? " alarming" : "");
+
+            var cdMin = Math.floor(t.countdownTotal / 60000);
+            var cdSec = Math.floor((t.countdownTotal % 60000) / 1000);
+
+            var html = '<div class="' + cls + '" id="card-' + t.id + '" style="border-color:' + (t.running ? t.color : "#1e2d4a") + '">' +
+                '<div class="timer-header">' +
+                '<input class="timer-name" value="' + escHtml(t.name) + '" onchange="getTimer(' + t.id + ').name=this.value" style="color:' + t.color + '">' +
+                '<button class="timer-delete" onclick="removeTimer(' + t.id + ')">✕</button></div>' +
+                '<div class="timer-display" id="display-' + t.id + '">' + formatTime(ms) + '</div>' +
+                '<div class="timer-mode">' +
+                '<button class="mode-btn' + (t.mode === "up" ? " active" : "") + '" onclick="setMode(' + t.id + ',\'up\')">▲ Cronómetro</button>' +
+                '<button class="mode-btn' + (t.mode === "down" ? " active" : "") + '" onclick="setMode(' + t.id + ',\'down\')">▼ Temporizador</button></div>' +
+                '<div class="countdown-input' + (t.mode === "down" ? " visible" : "") + '">' +
+                '<input type="number" id="cdm-' + t.id + '" value="' + cdMin + '" min="0" max="999"' + (t.running ? " disabled" : "") + '><span>min</span>' +
+                '<input type="number" id="cds-' + t.id + '" value="' + cdSec + '" min="0" max="59"' + (t.running ? " disabled" : "") + '><span>seg</span></div>' +
+                '<div class="timer-buttons">' +
+                (t.running ?
+                    '<button class="tbtn tbtn-pause" onclick="pauseTimer(' + t.id + ')">⏸ Pausa</button>' :
+                    '<button class="tbtn tbtn-start" onclick="startTimer(' + t.id + ')">▶ Start</button>') +
+                '<button class="tbtn tbtn-reset" onclick="resetTimer(' + t.id + ')">↺ Reset</button>' +
+                '<button class="tbtn tbtn-lap" onclick="lapTimer(' + t.id + ')">🏁 Lap</button></div>' +
+                '<div class="laps" id="laps-' + t.id + '">';
+
+            for (var j = t.laps.length - 1; j >= 0; j--) {
+                var l = t.laps[j];
+                html += '<div class="lap-item"><span>Lap ' + l.num + '</span><span>' + formatTime(l.lap) + '</span></div>';
+            }
+            html += '</div></div>';
+
+            var div = document.createElement("div");
+            div.innerHTML = html;
+            grid.appendChild(div.firstChild);
+        }
+        updateGlobalTime();
+    }
+
+    function updateTimerUI(id) {
+        var t = getTimer(id);
+        if (!t) return;
+        var display = document.getElementById("display-" + id);
+        var card = document.getElementById("card-" + id);
+        if (!display) return;
+
+        var ms = t.mode === "up" ? t.elapsed : t.remaining;
+        display.textContent = formatTime(ms);
+
+        if (card) {
+            card.className = "timer-card" + (t.running ? " running" : "") + (t.alarming ? " alarming" : "");
+            card.style.borderColor = t.running ? t.color : (t.alarming ? "#ef4444" : "#1e2d4a");
+        }
+        updateGlobalTime();
+    }
+
+    function updateGlobalTime() {
+        var total = 0;
+        for (var i = 0; i < timers.length; i++) {
+            total += timers[i].mode === "up" ? timers[i].elapsed : (timers[i].countdownTotal - timers[i].remaining);
+        }
+        document.getElementById("globalTime").textContent = formatTime(total);
+    }
+
+    function escHtml(s) { return s.replace(/"/g, "&quot;").replace(/</g, "&lt;"); }
+
+    // ═══════════════════════════════════════════════
+    // AUDIO BEEP
+    // ═══════════════════════════════════════════════
+
+    function playBeep() {
+        try {
+            var ctx = new (window.AudioContext || window.webkitAudioContext)();
+            var osc = ctx.createOscillator();
+            var gain = ctx.createGain();
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.frequency.value = 880;
+            osc.type = "square";
+            gain.gain.value = 0.3;
+            osc.start();
+            setTimeout(function() { osc.stop(); ctx.close(); }, 300);
+            // Double beep
+            setTimeout(function() {
+                try {
+                    var ctx2 = new (window.AudioContext || window.webkitAudioContext)();
+                    var osc2 = ctx2.createOscillator();
+                    var gain2 = ctx2.createGain();
+                    osc2.connect(gain2); gain2.connect(ctx2.destination);
+                    osc2.frequency.value = 1100; osc2.type = "square"; gain2.gain.value = 0.3;
+                    osc2.start();
+                    setTimeout(function() { osc2.stop(); ctx2.close(); }, 300);
+                } catch(e) {}
+            }, 400);
+        } catch(e) {}
+    }
+</script>
+</body>
+</html>

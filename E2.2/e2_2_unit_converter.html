@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>E2.2 — Conversor de Unidades Universal</title>
+    <style>
+        *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+        :root{--bg:#0f172a;--surface:#1e293b;--surface2:#334155;--border:#475569;--text:#e2e8f0;--text-dim:#94a3b8;--blue:#3b82f6;--green:#22c55e;--red:#ef4444;--orange:#f97316;--purple:#a855f7}
+        body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:20px}
+        h1{font-size:24px;margin-bottom:4px;text-align:center}
+        .subtitle{color:var(--text-dim);font-size:14px;margin-bottom:20px;text-align:center}
+        .container{max-width:700px;width:100%}
+
+        /* Tabs */
+        .tabs{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:20px;justify-content:center}
+        .tab{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:8px 14px;cursor:pointer;font-size:13px;transition:all .15s;color:var(--text-dim)}
+        .tab:hover{border-color:var(--blue);color:var(--text)}
+        .tab.active{background:var(--blue);border-color:var(--blue);color:white}
+
+        /* Converter card */
+        .card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px;margin-bottom:16px}
+        .card h2{font-size:16px;margin-bottom:16px;color:var(--text-dim)}
+
+        .converter-row{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+        .field{flex:1;min-width:200px}
+        .field label{display:block;font-size:12px;color:var(--text-dim);margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px}
+        .field input{width:100%;background:var(--bg);color:var(--text);border:2px solid var(--border);border-radius:8px;padding:14px 16px;font-size:20px;font-family:'Fira Code',monospace;outline:none;transition:border-color .2s}
+        .field input:focus{border-color:var(--blue)}
+        .field select{width:100%;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-size:14px;outline:none;margin-top:6px;cursor:pointer}
+        .field select:focus{border-color:var(--blue)}
+
+        .swap-btn{background:var(--surface2);border:1px solid var(--border);color:var(--text);width:44px;height:44px;border-radius:50%;cursor:pointer;font-size:20px;display:flex;align-items:center;justify-content:center;transition:all .2s;flex-shrink:0;margin-top:18px}
+        .swap-btn:hover{background:var(--blue);border-color:var(--blue);transform:rotate(180deg)}
+
+        .formula{background:var(--bg);border-radius:8px;padding:12px 16px;margin-top:16px;font-size:14px;color:var(--text-dim);font-family:'Fira Code',monospace;text-align:center}
+        .formula strong{color:var(--blue)}
+
+        /* Quick reference */
+        .ref-table{width:100%;border-collapse:collapse;font-size:13px;margin-top:12px}
+        .ref-table th{background:var(--bg);padding:8px 12px;text-align:left;color:var(--text-dim);font-size:11px;text-transform:uppercase;letter-spacing:.5px}
+        .ref-table td{padding:6px 12px;border-bottom:1px solid var(--border)}
+        .ref-table td:last-child{text-align:right;font-family:'Fira Code',monospace;color:var(--blue)}
+
+        /* History */
+        .history-item{display:flex;justify-content:space-between;padding:8px 12px;border-bottom:1px solid var(--border);font-size:13px}
+        .history-item:last-child{border-bottom:none}
+        .history-from{color:var(--text-dim)}
+        .history-to{color:var(--green);font-family:'Fira Code',monospace}
+
+        .copy-btn{background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:6px 12px;font-size:12px;cursor:pointer;transition:all .15s;margin-top:8px}
+        .copy-btn:hover{border-color:var(--green);color:var(--green)}
+
+        .toast{position:fixed;bottom:20px;right:20px;background:var(--green);color:white;padding:10px 20px;border-radius:8px;font-size:14px;opacity:0;transition:opacity .3s;z-index:100;pointer-events:none}
+        .toast.show{opacity:1}
+
+        @media(max-width:600px){
+            .converter-row{flex-direction:column}
+            .swap-btn{margin-top:0;align-self:center;transform:rotate(90deg)}
+            .swap-btn:hover{transform:rotate(270deg)}
+            .tabs{gap:2px}
+            .tab{padding:6px 10px;font-size:12px}
+        }
+    </style>
+</head>
+<body>
+
+<h1>🔄 Conversor de Unidades Universal</h1>
+<p class="subtitle">8 categorías · Conversión bidireccional en tiempo real</p>
+
+<div class="container">
+    <div class="tabs" id="tabs"></div>
+
+    <div class="card">
+        <h2 id="categoryTitle">Longitud</h2>
+        <div class="converter-row">
+            <div class="field">
+                <label>De</label>
+                <input type="number" id="inputFrom" value="1" step="any" oninput="convertFrom()">
+                <select id="unitFrom" onchange="convertFrom()"></select>
+            </div>
+            <button class="swap-btn" onclick="swapUnits()" title="Intercambiar">⇄</button>
+            <div class="field">
+                <label>A</label>
+                <input type="number" id="inputTo" step="any" oninput="convertTo()">
+                <select id="unitTo" onchange="convertFrom()"></select>
+            </div>
+        </div>
+        <div class="formula" id="formula"></div>
+        <button class="copy-btn" onclick="copyResult()">📋 Copiar resultado</button>
+    </div>
+
+    <div class="card">
+        <h2>📊 Referencia Rápida</h2>
+        <table class="ref-table" id="refTable">
+            <thead><tr><th>De</th><th>A</th><th>Factor</th></tr></thead>
+            <tbody id="refBody"></tbody>
+        </table>
+    </div>
+
+    <div class="card">
+        <h2>🕐 Historial <span style="font-weight:400;font-size:13px;color:var(--text-dim)">(últimas 10)</span></h2>
+        <div id="history"><div style="color:var(--text-dim);font-size:13px;padding:8px;">Aún sin conversiones</div></div>
+    </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+    // ═══════════════════════════════════════════════
+    // CATEGORIES & UNITS
+    // ═══════════════════════════════════════════════
+
+    var CATEGORIES = {
+        longitud: {
+            icon: "📏", base: "metro",
+            units: { "metro": 1, "kilómetro": 1000, "centímetro": 0.01, "milímetro": 0.001, "milla": 1609.344, "yarda": 0.9144, "pie": 0.3048, "pulgada": 0.0254, "milla náutica": 1852 }
+        },
+        peso: {
+            icon: "⚖️", base: "kilogramo",
+            units: { "kilogramo": 1, "gramo": 0.001, "miligramo": 0.000001, "tonelada": 1000, "libra": 0.453592, "onza": 0.0283495 }
+        },
+        temperatura: {
+            icon: "🌡️", base: "celsius", special: true,
+            units: { "Celsius": 1, "Fahrenheit": 1, "Kelvin": 1 }
+        },
+        velocidad: {
+            icon: "🏎️", base: "m/s",
+            units: { "m/s": 1, "km/h": 0.277778, "mph": 0.44704, "nudos": 0.514444 }
+        },
+        area: {
+            icon: "📐", base: "m²",
+            units: { "m²": 1, "km²": 1000000, "hectárea": 10000, "acre": 4046.86, "pie²": 0.092903, "pulgada²": 0.00064516 }
+        },
+        volumen: {
+            icon: "🧪", base: "litro",
+            units: { "litro": 1, "mililitro": 0.001, "galón (US)": 3.78541, "galón (UK)": 4.54609, "onza fluida": 0.0295735, "taza": 0.24, "m³": 1000, "cm³": 0.001 }
+        },
+        tiempo: {
+            icon: "⏱️", base: "segundo",
+            units: { "segundo": 1, "minuto": 60, "hora": 3600, "día": 86400, "semana": 604800, "año": 31536000 }
+        },
+        datos: {
+            icon: "💾", base: "byte",
+            units: { "bit": 0.125, "byte": 1, "kilobyte": 1024, "megabyte": 1048576, "gigabyte": 1073741824, "terabyte": 1099511627776 }
+        }
+    };
+
+    var currentCategory = "longitud";
+    var historyList = [];
+
+    // ═══════════════════════════════════════════════
+    // TEMPERATURE SPECIAL HANDLING
+    // ═══════════════════════════════════════════════
+
+    function convertTemp(value, from, to) {
+        if (from === to) return value;
+        // Convert to Celsius first
+        var celsius;
+        if (from === "Celsius") celsius = value;
+        else if (from === "Fahrenheit") celsius = (value - 32) * 5 / 9;
+        else celsius = value - 273.15; // Kelvin
+
+        // Convert from Celsius to target
+        if (to === "Celsius") return celsius;
+        if (to === "Fahrenheit") return celsius * 9 / 5 + 32;
+        return celsius + 273.15; // Kelvin
+    }
+
+    // ═══════════════════════════════════════════════
+    // CONVERSION
+    // ═══════════════════════════════════════════════
+
+    function doConvert(value, fromUnit, toUnit) {
+        var cat = CATEGORIES[currentCategory];
+        if (isNaN(value)) return 0;
+
+        if (cat.special) {
+            return convertTemp(value, fromUnit, toUnit);
+        }
+
+        var fromFactor = cat.units[fromUnit] || 1;
+        var toFactor = cat.units[toUnit] || 1;
+        return value * fromFactor / toFactor;
+    }
+
+    function formatNumber(n) {
+        if (n === 0) return "0";
+        var abs = Math.abs(n);
+        if (abs >= 1000000) return n.toLocaleString("es-ES", { maximumFractionDigits: 2 });
+        if (abs >= 1) return n.toLocaleString("es-ES", { maximumFractionDigits: 6 });
+        if (abs >= 0.001) return n.toLocaleString("es-ES", { maximumFractionDigits: 8 });
+        return n.toExponential(4);
+    }
+
+    function convertFrom() {
+        var val = parseFloat(document.getElementById("inputFrom").value);
+        var from = document.getElementById("unitFrom").value;
+        var to = document.getElementById("unitTo").value;
+        if (isNaN(val)) { document.getElementById("inputTo").value = ""; updateFormula(); return; }
+        var result = doConvert(val, from, to);
+        document.getElementById("inputTo").value = formatNumber(result);
+        updateFormula();
+        addHistory(val, from, result, to);
+    }
+
+    function convertTo() {
+        var val = parseFloat(document.getElementById("inputTo").value);
+        var from = document.getElementById("unitTo").value;
+        var to = document.getElementById("unitFrom").value;
+        if (isNaN(val)) { document.getElementById("inputFrom").value = ""; updateFormula(); return; }
+        var result = doConvert(val, from, to);
+        document.getElementById("inputFrom").value = formatNumber(result);
+        updateFormula();
+    }
+
+    function swapUnits() {
+        var selFrom = document.getElementById("unitFrom");
+        var selTo = document.getElementById("unitTo");
+        var tmp = selFrom.value;
+        selFrom.value = selTo.value;
+        selTo.value = tmp;
+        convertFrom();
+    }
+
+    function updateFormula() {
+        var from = document.getElementById("unitFrom").value;
+        var to = document.getElementById("unitTo").value;
+        var cat = CATEGORIES[currentCategory];
+        var el = document.getElementById("formula");
+
+        if (cat.special) {
+            var formulas = {
+                "Celsius-Fahrenheit": "°F = °C × 9/5 + 32",
+                "Fahrenheit-Celsius": "°C = (°F - 32) × 5/9",
+                "Celsius-Kelvin": "K = °C + 273.15",
+                "Kelvin-Celsius": "°C = K - 273.15",
+                "Fahrenheit-Kelvin": "K = (°F - 32) × 5/9 + 273.15",
+                "Kelvin-Fahrenheit": "°F = (K - 273.15) × 9/5 + 32"
+            };
+            var key = from + "-" + to;
+            el.innerHTML = formulas[key] || (from === to ? "Misma unidad" : "");
+            return;
+        }
+
+        var factor = doConvert(1, from, to);
+        el.innerHTML = "<strong>1</strong> " + from + " = <strong>" + formatNumber(factor) + "</strong> " + to;
+    }
+
+    // ═══════════════════════════════════════════════
+    // UI RENDERING
+    // ═══════════════════════════════════════════════
+
+    function renderTabs() {
+        var container = document.getElementById("tabs");
+        container.innerHTML = "";
+        var keys = Object.keys(CATEGORIES);
+        for (var i = 0; i < keys.length; i++) {
+            var key = keys[i];
+            var cat = CATEGORIES[key];
+            var tab = document.createElement("button");
+            tab.className = "tab" + (key === currentCategory ? " active" : "");
+            tab.textContent = cat.icon + " " + key.charAt(0).toUpperCase() + key.slice(1);
+            tab.setAttribute("data-cat", key);
+            tab.onclick = function() { selectCategory(this.getAttribute("data-cat")); };
+            container.appendChild(tab);
+        }
+    }
+
+    function selectCategory(cat) {
+        currentCategory = cat;
+        renderTabs();
+        renderUnits();
+        renderRefTable();
+        document.getElementById("categoryTitle").textContent =
+            CATEGORIES[cat].icon + " " + cat.charAt(0).toUpperCase() + cat.slice(1);
+        document.getElementById("inputFrom").value = "1";
+        convertFrom();
+    }
+
+    function renderUnits() {
+        var cat = CATEGORIES[currentCategory];
+        var unitNames = Object.keys(cat.units);
+        var selFrom = document.getElementById("unitFrom");
+        var selTo = document.getElementById("unitTo");
+
+        selFrom.innerHTML = "";
+        selTo.innerHTML = "";
+
+        for (var i = 0; i < unitNames.length; i++) {
+            var opt1 = document.createElement("option");
+            opt1.value = unitNames[i];
+            opt1.textContent = unitNames[i];
+            selFrom.appendChild(opt1);
+
+            var opt2 = document.createElement("option");
+            opt2.value = unitNames[i];
+            opt2.textContent = unitNames[i];
+            selTo.appendChild(opt2);
+        }
+
+        // Default: select first and second unit
+        if (unitNames.length >= 2) {
+            selFrom.value = unitNames[0];
+            selTo.value = unitNames[1];
+        }
+    }
+
+    function renderRefTable() {
+        var cat = CATEGORIES[currentCategory];
+        var tbody = document.getElementById("refBody");
+        tbody.innerHTML = "";
+        var unitNames = Object.keys(cat.units);
+
+        // Show conversions from first unit to all others
+        var baseUnit = unitNames[0];
+        for (var i = 1; i < unitNames.length && i < 8; i++) {
+            var tr = document.createElement("tr");
+            var factor = doConvert(1, baseUnit, unitNames[i]);
+            tr.innerHTML = "<td>1 " + baseUnit + "</td><td>" + unitNames[i] + "</td><td>" + formatNumber(factor) + "</td>";
+            tbody.appendChild(tr);
+        }
+    }
+
+    // ═══════════════════════════════════════════════
+    // HISTORY
+    // ═══════════════════════════════════════════════
+
+    function addHistory(fromVal, fromUnit, toVal, toUnit) {
+        historyList.unshift({
+            from: formatNumber(fromVal) + " " + fromUnit,
+            to: formatNumber(toVal) + " " + toUnit,
+            cat: currentCategory
+        });
+        if (historyList.length > 10) historyList.pop();
+        renderHistory();
+    }
+
+    function renderHistory() {
+        var el = document.getElementById("history");
+        if (historyList.length === 0) {
+            el.innerHTML = '<div style="color:var(--text-dim);font-size:13px;padding:8px;">Aún sin conversiones</div>';
+            return;
+        }
+        el.innerHTML = "";
+        for (var i = 0; i < historyList.length; i++) {
+            var h = historyList[i];
+            var div = document.createElement("div");
+            div.className = "history-item";
+            div.innerHTML = '<span class="history-from">' + h.from + '</span><span class="history-to">= ' + h.to + '</span>';
+            el.appendChild(div);
+        }
+    }
+
+    // ═══════════════════════════════════════════════
+    // COPY
+    // ═══════════════════════════════════════════════
+
+    function copyResult() {
+        var from = document.getElementById("inputFrom").value;
+        var fromUnit = document.getElementById("unitFrom").value;
+        var to = document.getElementById("inputTo").value;
+        var toUnit = document.getElementById("unitTo").value;
+        var text = from + " " + fromUnit + " = " + to + " " + toUnit;
+
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(function() { showToast("📋 Copiado"); });
+        } else {
+            var ta = document.createElement("textarea");
+            ta.value = text;
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand("copy");
+            document.body.removeChild(ta);
+            showToast("📋 Copiado");
+        }
+    }
+
+    function showToast(msg) {
+        var t = document.getElementById("toast");
+        t.textContent = msg;
+        t.classList.add("show");
+        setTimeout(function() { t.classList.remove("show"); }, 1500);
+    }
+
+    // ═══════════════════════════════════════════════
+    // INIT
+    // ═══════════════════════════════════════════════
+
+    renderTabs();
+    renderUnits();
+    renderRefTable();
+    document.getElementById("inputFrom").value = "1";
+    convertFrom();
+</script>
+
+</body>
+</html>

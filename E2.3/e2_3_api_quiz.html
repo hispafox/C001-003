@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>E2.3 — Quiz: ¿Es Real esta API?</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/styles/atom-one-dark.min.css">
+    <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/highlight.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/languages/python.min.js"></script>
+    <style>
+        *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+        :root{--bg:#0f172a;--surface:#1e293b;--surface2:#334155;--border:#475569;--text:#e2e8f0;--text-dim:#94a3b8;--blue:#3b82f6;--green:#22c55e;--red:#ef4444;--orange:#f97316}
+        body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:20px}
+        .container{max-width:700px;width:100%}
+        h1{text-align:center;font-size:24px;margin-bottom:4px}
+        .subtitle{text-align:center;color:var(--text-dim);font-size:14px;margin-bottom:24px}
+
+        /* Progress */
+        .progress-bar{background:var(--surface);border-radius:8px;height:8px;margin-bottom:8px;overflow:hidden}
+        .progress-fill{height:100%;background:var(--blue);border-radius:8px;transition:width .4s ease}
+        .progress-text{display:flex;justify-content:space-between;font-size:13px;color:var(--text-dim);margin-bottom:20px}
+        .score{color:var(--green);font-weight:600}
+
+        /* Card */
+        .card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px;margin-bottom:16px;transition:border-color .3s}
+        .card.correct{border-color:var(--green);background:rgba(34,197,94,0.05)}
+        .card.wrong{border-color:var(--red);background:rgba(239,68,68,0.05)}
+
+        .card h2{font-size:16px;margin-bottom:16px;color:var(--text-dim)}
+
+        /* Code block */
+        .code-block{border-radius:8px;overflow:hidden;margin-bottom:20px;background:#282c34}
+        .code-block pre{margin:0;padding:16px!important;font-size:14px!important;line-height:1.6!important;background:#282c34!important;color:#abb2bf!important}
+        .code-block code{font-family:'Fira Code','Courier New',monospace;background:transparent!important}
+
+        /* Buttons */
+        .btn-row{display:flex;gap:12px;justify-content:center;margin-bottom:16px}
+        .btn-answer{flex:1;padding:16px;border:2px solid var(--border);border-radius:12px;font-size:16px;font-weight:600;cursor:pointer;transition:all .2s;background:var(--bg);color:var(--text);max-width:250px}
+        .btn-answer:hover:not(:disabled){transform:translateY(-2px);box-shadow:0 4px 12px rgba(0,0,0,.3)}
+        .btn-answer:disabled{opacity:.5;cursor:default;transform:none}
+        .btn-real{border-color:rgba(34,197,94,.3);color:var(--green)}
+        .btn-real:hover:not(:disabled){border-color:var(--green);background:rgba(34,197,94,.1)}
+        .btn-fake{border-color:rgba(239,68,68,.3);color:var(--red)}
+        .btn-fake:hover:not(:disabled){border-color:var(--red);background:rgba(239,68,68,.1)}
+
+        /* Feedback */
+        .feedback{display:none;padding:16px;border-radius:8px;margin-bottom:16px;font-size:14px;line-height:1.6}
+        .feedback.visible{display:block}
+        .feedback.correct-fb{background:rgba(34,197,94,.1);border-left:4px solid var(--green)}
+        .feedback.wrong-fb{background:rgba(239,68,68,.1);border-left:4px solid var(--red)}
+        .feedback h3{margin-bottom:8px;font-size:15px}
+        .feedback a{color:var(--blue)}
+
+        .btn-next{background:var(--blue);color:white;border:none;border-radius:8px;padding:12px 32px;font-size:15px;font-weight:600;cursor:pointer;display:none;margin:0 auto;transition:background .15s}
+        .btn-next.visible{display:block}
+        .btn-next:hover{background:#2563eb}
+
+        /* Final screen */
+        .final{display:none;text-align:center}
+        .final.visible{display:block}
+        .final-score{font-size:64px;font-weight:800;margin:16px 0}
+        .final-grade{font-size:20px;margin-bottom:16px;padding:8px 24px;border-radius:12px;display:inline-block}
+        .grade-expert{background:rgba(34,197,94,.2);color:var(--green)}
+        .grade-good{background:rgba(59,130,246,.2);color:var(--blue)}
+        .grade-mid{background:rgba(249,115,22,.2);color:var(--orange)}
+        .grade-low{background:rgba(239,68,68,.2);color:var(--red)}
+        .final-summary{text-align:left;margin:20px 0}
+        .summary-item{padding:10px 16px;border-bottom:1px solid var(--border);font-size:13px;display:flex;gap:8px;align-items:center}
+        .btn-replay{background:var(--blue);color:white;border:none;border-radius:8px;padding:12px 32px;font-size:15px;font-weight:600;cursor:pointer;margin-top:16px}
+        .btn-replay:hover{background:#2563eb}
+
+        /* Confetti */
+        .confetti-piece{position:fixed;width:10px;height:10px;top:-10px;opacity:0;pointer-events:none}
+        @keyframes confettiFall{0%{top:-10px;opacity:1;transform:rotate(0deg)}100%{top:105vh;opacity:0;transform:rotate(720deg)}}
+
+        @media(max-width:500px){.btn-answer{font-size:14px;padding:12px}}
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>🔍 ¿Es Real esta API?</h1>
+    <p class="subtitle">¿Puedes distinguir código Python real de alucinaciones de IA?</p>
+
+    <div class="progress-bar"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+    <div class="progress-text">
+        <span>Pregunta <span id="qNum">1</span>/10</span>
+        <span class="score">Aciertos: <span id="scoreDisplay">0</span></span>
+    </div>
+
+    <div id="quizArea">
+        <div class="card" id="questionCard">
+            <h2>¿Este código usa una API real de Python?</h2>
+            <div class="code-block"><pre><code class="language-python" id="codeDisplay"></code></pre></div>
+            <div class="btn-row">
+                <button class="btn-answer btn-real" id="btnReal" onclick="answerQuestion(true)">✅ API Real</button>
+                <button class="btn-answer btn-fake" id="btnFake" onclick="answerQuestion(false)">❌ API Inventada</button>
+            </div>
+        </div>
+
+        <div class="feedback" id="feedback">
+            <h3 id="feedbackTitle"></h3>
+            <p id="feedbackText"></p>
+        </div>
+
+        <button class="btn-next" id="btnNext" onclick="nextQuestion()">Siguiente →</button>
+    </div>
+
+    <div class="final" id="finalScreen">
+        <div class="card">
+            <h2>Resultado Final</h2>
+            <div class="final-score" id="finalScore">0/10</div>
+            <div class="final-grade" id="finalGrade"></div>
+            <div class="final-summary" id="finalSummary"></div>
+            <button class="btn-replay" onclick="startQuiz()">🔄 Jugar de Nuevo</button>
+        </div>
+    </div>
+</div>
+
+<div class="toast" id="toast" style="position:fixed;bottom:20px;right:20px;background:var(--green);color:white;padding:10px 20px;border-radius:8px;font-size:14px;opacity:0;transition:opacity .3s;z-index:100;pointer-events:none"></div>
+
+<script>
+    var QUESTIONS = [
+        {
+            code: "from collections import defaultdict\n\ndata = [('a', 1), ('b', 2), ('a', 3)]\ngrouped = defaultdict(list)\nfor key, val in data:\n    grouped[key].append(val)\nprint(dict(grouped))",
+            isReal: true,
+            title: "collections.defaultdict",
+            explanation: "defaultdict es una clase real del módulo collections de la librería estándar. Crea diccionarios con un valor por defecto para claves nuevas.",
+            link: "https://docs.python.org/3/library/collections.html#collections.defaultdict"
+        },
+        {
+            code: "from pathlib import Path\n\narchivo = Path('datos.txt')\nif archivo.exists():\n    contenido = archivo.read_text(encoding='utf-8')\n    print(f'Tamaño: {archivo.stat().st_size} bytes')",
+            isReal: true,
+            title: "pathlib.Path",
+            explanation: "Path es una clase real de pathlib en la librería estándar. Proporciona una interfaz orientada a objetos para trabajar con rutas de archivos.",
+            link: "https://docs.python.org/3/library/pathlib.html"
+        },
+        {
+            code: "import json\n\ndata = {'nombre': 'Ana', 'edad': 30, 'skills': ['Python', 'SQL']}\nresult = json.dumps(data, indent=2, ensure_ascii=False)\nprint(result)",
+            isReal: true,
+            title: "json.dumps()",
+            explanation: "json.dumps() es una función real del módulo json. Serializa un objeto Python a una cadena JSON con opciones de formato.",
+            link: "https://docs.python.org/3/library/json.html#json.dumps"
+        },
+        {
+            code: "from itertools import groupby\n\nanimales = ['gato', 'perro', 'gato', 'pez', 'perro']\nordenados = sorted(animales)\nfor clave, grupo in groupby(ordenados):\n    print(f'{clave}: {list(grupo)}')",
+            isReal: true,
+            title: "itertools.groupby()",
+            explanation: "groupby es una función real de itertools. Agrupa elementos consecutivos iguales de un iterable. Requiere que los datos estén ordenados previamente.",
+            link: "https://docs.python.org/3/library/itertools.html#itertools.groupby"
+        },
+        {
+            code: "from functools import lru_cache\n\n@lru_cache(maxsize=128)\ndef fibonacci(n):\n    if n < 2:\n        return n\n    return fibonacci(n-1) + fibonacci(n-2)\n\nprint(fibonacci(50))",
+            isReal: true,
+            title: "functools.lru_cache",
+            explanation: "lru_cache es un decorador real de functools. Implementa memoización automática con caché LRU (Least Recently Used), ideal para funciones recursivas.",
+            link: "https://docs.python.org/3/library/functools.html#functools.lru_cache"
+        },
+        {
+            code: "from pandas import QuickFrame\n\ndata = {'nombre': ['Ana', 'Luis'], 'edad': [30, 25]}\nqf = QuickFrame.from_dict(data)\nqf.auto_clean(drop_nulls=True)\nprint(qf.to_summary())",
+            isReal: false,
+            title: "pandas.QuickFrame",
+            explanation: "QuickFrame NO existe en pandas. La clase real es DataFrame. Los métodos auto_clean() y to_summary() tampoco existen. Son alucinaciones típicas que suenan plausibles.",
+            alternative: "Usa pandas.DataFrame con dropna() y describe()"
+        },
+        {
+            code: "from sklearn.neural import DeepClassifier\n\nclf = DeepClassifier(layers=[128, 64, 32], activation='relu')\nclf.fit(X_train, y_train)\npredictions = clf.predict(X_test)\nprint(f'Accuracy: {clf.score(X_test, y_test):.2f}')",
+            isReal: false,
+            title: "sklearn.neural.DeepClassifier",
+            explanation: "El módulo sklearn.neural NO existe. sklearn tiene sklearn.neural_network con MLPClassifier, pero 'DeepClassifier' es inventado. La API parece real porque sigue el patrón fit/predict de sklearn.",
+            alternative: "Usa sklearn.neural_network.MLPClassifier"
+        },
+        {
+            code: "from collections import SortedDict\n\ntasks = SortedDict(key=lambda x: x['priority'])\ntasks['task1'] = {'name': 'Deploy', 'priority': 1}\ntasks['task2'] = {'name': 'Test', 'priority': 2}\nfor k, v in tasks.items():\n    print(f'{v[\"name\"]}: priority {v[\"priority\"]}')",
+            isReal: false,
+            title: "collections.SortedDict",
+            explanation: "SortedDict NO existe en collections. El módulo collections tiene OrderedDict (mantiene orden de inserción) pero no ordena por valor. Para diccionarios ordenados por clave/valor necesitas la librería externa 'sortedcontainers'.",
+            alternative: "Usa collections.OrderedDict o sortedcontainers.SortedDict (pip install sortedcontainers)"
+        },
+        {
+            code: "import fastvalidate\n\nschema = {\n    'nombre': {'type': 'str', 'min_length': 2},\n    'email': {'type': 'email', 'required': True},\n    'edad': {'type': 'int', 'min': 18, 'max': 120}\n}\nresult = fastvalidate.check_schema(data, schema)\nprint(f'Valid: {result.is_valid}')",
+            isReal: false,
+            title: "fastvalidate",
+            explanation: "La librería 'fastvalidate' NO existe. Es un nombre inventado que suena plausible. Para validación de esquemas en Python, las alternativas reales son: pydantic, marshmallow, cerberus, o jsonschema.",
+            alternative: "Usa pydantic, marshmallow, cerberus o jsonschema"
+        },
+        {
+            code: "from pathlib import RemotePath\n\nremote = RemotePath('s3://my-bucket/data/archivo.csv')\nif remote.exists():\n    local = remote.download('/tmp/archivo.csv')\n    print(f'Descargado: {local.stat().st_size} bytes')",
+            isReal: false,
+            title: "pathlib.RemotePath",
+            explanation: "RemotePath NO existe en pathlib. El módulo pathlib solo trabaja con rutas locales del sistema de archivos. Para acceder a S3 necesitas boto3 (AWS SDK). El código parece natural porque extiende la API de Path, pero es inventado.",
+            alternative: "Usa boto3 para S3, o fsspec/smart_open para acceso genérico a archivos remotos"
+        }
+    ];
+
+    var currentIndex = 0;
+    var scoreCount = 0;
+    var answered = false;
+    var shuffledQuestions = [];
+    var results = [];
+
+    function shuffleArray(arr) {
+        var a = arr.slice();
+        for (var i = a.length - 1; i > 0; i--) {
+            var j = Math.floor(Math.random() * (i + 1));
+            var t = a[i]; a[i] = a[j]; a[j] = t;
+        }
+        return a;
+    }
+
+    function startQuiz() {
+        shuffledQuestions = shuffleArray(QUESTIONS);
+        currentIndex = 0;
+        scoreCount = 0;
+        answered = false;
+        results = [];
+        document.getElementById("finalScreen").classList.remove("visible");
+        document.getElementById("quizArea").style.display = "block";
+        showQuestion();
+    }
+
+    function showQuestion() {
+        var q = shuffledQuestions[currentIndex];
+        document.getElementById("qNum").textContent = currentIndex + 1;
+        document.getElementById("scoreDisplay").textContent = scoreCount;
+        document.getElementById("progressFill").style.width = ((currentIndex) / 10 * 100) + "%";
+
+        var codeEl = document.getElementById("codeDisplay");
+        codeEl.textContent = q.code;
+        codeEl.className = "language-python";
+        if (typeof hljs !== "undefined") { try { hljs.highlightElement(codeEl); } catch(e) {} }
+
+        document.getElementById("btnReal").disabled = false;
+        document.getElementById("btnFake").disabled = false;
+        document.getElementById("feedback").classList.remove("visible", "correct-fb", "wrong-fb");
+        document.getElementById("btnNext").classList.remove("visible");
+        document.getElementById("questionCard").classList.remove("correct", "wrong");
+        answered = false;
+    }
+
+    function answerQuestion(userSaidReal) {
+        if (answered) return;
+        answered = true;
+
+        var q = shuffledQuestions[currentIndex];
+        var isCorrect = (userSaidReal === q.isReal);
+
+        if (isCorrect) scoreCount++;
+
+        results.push({ question: q, correct: isCorrect, userSaidReal: userSaidReal });
+
+        // Update UI
+        document.getElementById("scoreDisplay").textContent = scoreCount;
+        document.getElementById("btnReal").disabled = true;
+        document.getElementById("btnFake").disabled = true;
+
+        var card = document.getElementById("questionCard");
+        card.classList.add(isCorrect ? "correct" : "wrong");
+
+        var fb = document.getElementById("feedback");
+        var fbTitle = document.getElementById("feedbackTitle");
+        var fbText = document.getElementById("feedbackText");
+
+        fb.classList.remove("correct-fb", "wrong-fb");
+        fb.classList.add("visible", isCorrect ? "correct-fb" : "wrong-fb");
+
+        fbTitle.textContent = isCorrect
+            ? (q.isReal ? "✅ ¡Correcto! Esta API es REAL" : "✅ ¡Correcto! Esta API es INVENTADA")
+            : (q.isReal ? "❌ Incorrecto — Esta API es REAL" : "❌ Incorrecto — Esta API es INVENTADA");
+
+        var textHtml = q.explanation;
+        if (q.link) {
+            textHtml += '<br><br>📖 <a href="' + q.link + '" target="_blank">Ver documentación oficial</a>';
+        }
+        if (q.alternative) {
+            textHtml += '<br><br>💡 <strong>Alternativa real:</strong> ' + q.alternative;
+        }
+        fbText.innerHTML = textHtml;
+
+        document.getElementById("btnNext").classList.add("visible");
+    }
+
+    function nextQuestion() {
+        currentIndex++;
+        if (currentIndex >= 10) {
+            showFinal();
+        } else {
+            showQuestion();
+        }
+    }
+
+    function showFinal() {
+        document.getElementById("quizArea").style.display = "none";
+        document.getElementById("progressFill").style.width = "100%";
+
+        var finalEl = document.getElementById("finalScreen");
+        finalEl.classList.add("visible");
+
+        document.getElementById("finalScore").textContent = scoreCount + "/10";
+
+        var gradeEl = document.getElementById("finalGrade");
+        if (scoreCount === 10) {
+            gradeEl.textContent = "🏆 ¡Experto en detección de alucinaciones!";
+            gradeEl.className = "final-grade grade-expert";
+            launchConfetti();
+        } else if (scoreCount >= 7) {
+            gradeEl.textContent = "👍 Buen ojo — detectas la mayoría";
+            gradeEl.className = "final-grade grade-good";
+        } else if (scoreCount >= 4) {
+            gradeEl.textContent = "⚠️ Necesitas más práctica";
+            gradeEl.className = "final-grade grade-mid";
+        } else {
+            gradeEl.textContent = "🚨 ¡Cuidado con las alucinaciones!";
+            gradeEl.className = "final-grade grade-low";
+        }
+
+        // Summary
+        var summary = document.getElementById("finalSummary");
+        summary.innerHTML = "";
+        for (var i = 0; i < results.length; i++) {
+            var r = results[i];
+            var icon = r.correct ? "✅" : "❌";
+            var realText = r.question.isReal ? "REAL" : "INVENTADA";
+            var div = document.createElement("div");
+            div.className = "summary-item";
+            div.innerHTML = '<span>' + icon + '</span><span><strong>' + r.question.title + '</strong> — ' + realText + '</span>';
+            summary.appendChild(div);
+        }
+    }
+
+    function launchConfetti() {
+        var colors = ["#3b82f6", "#22c55e", "#ef4444", "#f97316", "#a855f7", "#eab308"];
+        for (var i = 0; i < 50; i++) {
+            var piece = document.createElement("div");
+            piece.className = "confetti-piece";
+            piece.style.left = Math.random() * 100 + "vw";
+            piece.style.background = colors[Math.floor(Math.random() * colors.length)];
+            piece.style.borderRadius = Math.random() > 0.5 ? "50%" : "0";
+            piece.style.width = (Math.random() * 8 + 6) + "px";
+            piece.style.height = (Math.random() * 8 + 6) + "px";
+            piece.style.animation = "confettiFall " + (Math.random() * 2 + 2) + "s ease-out " + (Math.random() * 1) + "s forwards";
+            document.body.appendChild(piece);
+            (function(p) {
+                setTimeout(function() { if (p.parentNode) p.parentNode.removeChild(p); }, 5000);
+            })(piece);
+        }
+    }
+
+    // Init
+    startQuiz();
+</script>
+
+</body>
+</html>

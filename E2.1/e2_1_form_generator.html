@@ -1,0 +1,724 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>E2.1 — Generador de Formularios Dinámicos</title>
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --bg: #0f172a;
+            --surface: #1e293b;
+            --border: #475569;
+            --text: #e2e8f0;
+            --text-dim: #94a3b8;
+            --blue: #3b82f6;
+            --green: #22c55e;
+            --red: #ef4444;
+            --orange: #f97316;
+            --form-bg: #f8fafc;
+            --form-text: #1e293b;
+            --form-border: #cbd5e1;
+            --form-label: #475569;
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        header {
+            background: var(--surface);
+            padding: 12px 20px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        header h1 { font-size: 18px; }
+        header h1 span { color: var(--text-dim); font-weight: 400; font-size: 13px; margin-left: 8px; }
+
+        .header-btns { display: flex; gap: 6px; }
+
+        .btn {
+            background: var(--surface);
+            color: var(--text);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 6px 12px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .btn:hover { border-color: var(--blue); background: rgba(59,130,246,0.1); }
+        .btn-primary { background: var(--blue); border-color: var(--blue); color: white; }
+        .btn-primary:hover { background: #2563eb; }
+
+        .stats-bar {
+            background: var(--surface);
+            padding: 6px 20px;
+            border-bottom: 1px solid var(--border);
+            font-size: 12px;
+            color: var(--text-dim);
+            display: flex;
+            gap: 20px;
+        }
+
+        .stats-bar .stat-value { color: var(--blue); font-weight: 600; }
+
+        /* ── Main panels ── */
+        main {
+            flex: 1;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            min-height: 0;
+        }
+
+        /* ── Left: JSON Editor ── */
+        .editor-panel {
+            background: #1a1a2e;
+            display: flex;
+            flex-direction: column;
+            border-right: 1px solid var(--border);
+        }
+
+        .panel-header {
+            padding: 10px 16px;
+            font-size: 13px;
+            font-weight: 600;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        #jsonEditor {
+            flex: 1;
+            background: #0d1117;
+            color: #c9d1d9;
+            border: none;
+            padding: 16px;
+            font-family: 'Fira Code', 'Courier New', monospace;
+            font-size: 13px;
+            line-height: 1.6;
+            resize: none;
+            outline: none;
+            tab-size: 2;
+        }
+
+        .json-error {
+            background: rgba(239,68,68,0.15);
+            color: #fca5a5;
+            padding: 10px 16px;
+            font-size: 12px;
+            border-top: 1px solid rgba(239,68,68,0.3);
+            display: none;
+        }
+
+        .json-error.visible { display: block; }
+
+        /* ── Right: Rendered Form ── */
+        .form-panel {
+            background: var(--form-bg);
+            overflow-y: auto;
+            padding: 24px;
+        }
+
+        .form-title {
+            color: var(--form-text);
+            font-size: 20px;
+            font-weight: 700;
+            margin-bottom: 20px;
+        }
+
+        .form-field {
+            margin-bottom: 18px;
+        }
+
+        .form-field label {
+            display: block;
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--form-label);
+            margin-bottom: 6px;
+        }
+
+        .form-field label .required { color: var(--red); margin-left: 2px; }
+
+        .form-field input[type="text"],
+        .form-field input[type="email"],
+        .form-field input[type="password"],
+        .form-field input[type="number"],
+        .form-field input[type="tel"],
+        .form-field input[type="url"],
+        .form-field input[type="date"],
+        .form-field select,
+        .form-field textarea {
+            width: 100%;
+            padding: 10px 14px;
+            border: 2px solid var(--form-border);
+            border-radius: 8px;
+            font-size: 14px;
+            font-family: inherit;
+            background: white;
+            color: var(--form-text);
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .form-field input:focus, .form-field select:focus, .form-field textarea:focus {
+            border-color: var(--blue);
+        }
+
+        .form-field input.valid, .form-field select.valid, .form-field textarea.valid {
+            border-color: var(--green);
+        }
+
+        .form-field input.invalid, .form-field select.invalid, .form-field textarea.invalid {
+            border-color: var(--red);
+        }
+
+        .form-field textarea { resize: vertical; }
+
+        .field-error {
+            color: var(--red);
+            font-size: 12px;
+            margin-top: 4px;
+            display: none;
+        }
+
+        .field-error.visible { display: block; }
+
+        /* Range */
+        .range-wrapper {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .range-wrapper input[type="range"] { flex: 1; }
+        .range-value {
+            background: var(--blue);
+            color: white;
+            padding: 2px 10px;
+            border-radius: 12px;
+            font-size: 13px;
+            font-weight: 600;
+            min-width: 36px;
+            text-align: center;
+        }
+
+        /* Checkbox / Radio */
+        .check-group { display: flex; flex-direction: column; gap: 8px; }
+        .check-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            color: var(--form-text);
+            cursor: pointer;
+        }
+
+        .check-item input { width: 18px; height: 18px; cursor: pointer; }
+
+        /* Color */
+        .color-wrapper {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .color-wrapper input[type="color"] {
+            width: 48px;
+            height: 36px;
+            border: 2px solid var(--form-border);
+            border-radius: 6px;
+            padding: 2px;
+            cursor: pointer;
+        }
+
+        .color-hex { font-size: 13px; color: var(--form-label); font-family: monospace; }
+
+        /* Submit area */
+        .form-submit {
+            margin-top: 24px;
+            padding-top: 20px;
+            border-top: 1px solid #e2e8f0;
+        }
+
+        .form-submit button {
+            background: var(--blue);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 12px 32px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.15s;
+            margin-right: 8px;
+        }
+
+        .form-submit button:hover { background: #2563eb; }
+
+        .form-submit .btn-clear {
+            background: white;
+            color: var(--form-label);
+            border: 1px solid var(--form-border);
+        }
+        .form-submit .btn-clear:hover { border-color: var(--red); color: var(--red); }
+
+        /* Output */
+        .form-output {
+            margin-top: 16px;
+            background: #0d1117;
+            color: #c9d1d9;
+            padding: 16px;
+            border-radius: 8px;
+            font-family: 'Fira Code', monospace;
+            font-size: 13px;
+            white-space: pre-wrap;
+            display: none;
+        }
+
+        .form-output.visible { display: block; }
+
+        .form-empty {
+            text-align: center;
+            padding: 40px;
+            color: var(--form-label);
+            font-size: 14px;
+        }
+
+        /* ── Responsive ── */
+        @media (max-width: 768px) {
+            main { grid-template-columns: 1fr; grid-template-rows: 1fr 1fr; }
+            .editor-panel { border-right: none; border-bottom: 1px solid var(--border); }
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>📋 Form Generator <span>— JSON Schema → Formulario</span></h1>
+    <div class="header-btns">
+        <button class="btn" onclick="loadExample()">📝 Esquema ejemplo</button>
+        <button class="btn" onclick="loadMinimal()">📄 Esquema mínimo</button>
+    </div>
+</header>
+
+<div class="stats-bar">
+    <span>Campos: <span class="stat-value" id="statFields">0</span></span>
+    <span>Requeridos: <span class="stat-value" id="statRequired">0</span></span>
+    <span>Válidos: <span class="stat-value" id="statValid">0</span> / <span id="statTotal">0</span></span>
+</div>
+
+<main>
+    <div class="editor-panel">
+        <div class="panel-header">
+            <span>Esquema JSON</span>
+            <span style="font-size:11px; color:var(--text-dim);">Edita y el formulario se actualiza</span>
+        </div>
+        <textarea id="jsonEditor" spellcheck="false"></textarea>
+        <div class="json-error" id="jsonError"></div>
+    </div>
+
+    <div class="form-panel" id="formPanel">
+        <div class="form-empty">Carga un esquema JSON para generar el formulario</div>
+    </div>
+</main>
+
+<script>
+    var currentSchema = [];
+
+    var EXAMPLE_SCHEMA = [
+        { name: "nombre", label: "Nombre completo", type: "text", required: true, minLength: 2, maxLength: 50, placeholder: "Ej: Juan García" },
+        { name: "email", label: "Email", type: "email", required: true, placeholder: "usuario@ejemplo.com" },
+        { name: "edad", label: "Edad", type: "number", min: 18, max: 120, required: true },
+        { name: "rol", label: "Rol", type: "select", options: ["Desarrollador", "Diseñador", "PM", "QA", "DevOps"], required: true },
+        { name: "experiencia", label: "Años de experiencia", type: "range", min: 0, max: 30, step: 1, "default": 5 },
+        { name: "bio", label: "Biografía", type: "textarea", maxLength: 500, rows: 4, placeholder: "Cuéntanos sobre ti..." },
+        { name: "newsletter", label: "Suscribirse al newsletter", type: "checkbox", "default": true },
+        { name: "contacto", label: "Método de contacto preferido", type: "radio", options: ["Email", "Teléfono", "Slack"], required: true }
+    ];
+
+    var MINIMAL_SCHEMA = [
+        { name: "titulo", label: "Título", type: "text", required: true },
+        { name: "fecha", label: "Fecha", type: "date", required: true },
+        { name: "color", label: "Color favorito", type: "color" }
+    ];
+
+    // ═══════════════════════════════════════════════════
+    // PARSE & RENDER
+    // ═══════════════════════════════════════════════════
+
+    function parseSchema(jsonStr) {
+        var errorEl = document.getElementById('jsonError');
+        try {
+            var parsed = JSON.parse(jsonStr);
+            if (!Array.isArray(parsed)) {
+                errorEl.textContent = '⚠ El esquema debe ser un array JSON: [ { ... }, { ... } ]';
+                errorEl.classList.add('visible');
+                return null;
+            }
+            errorEl.classList.remove('visible');
+            return parsed;
+        } catch (e) {
+            var msg = e.message || 'JSON inválido';
+            errorEl.textContent = '⚠ Error JSON: ' + msg;
+            errorEl.classList.add('visible');
+            return null;
+        }
+    }
+
+    function renderForm(fields) {
+        var panel = document.getElementById('formPanel');
+        currentSchema = fields;
+
+        if (!fields || fields.length === 0) {
+            panel.innerHTML = '<div class="form-empty">Esquema vacío o sin campos</div>';
+            updateStats(0, 0, 0);
+            return;
+        }
+
+        var html = '<div class="form-title">Formulario Generado</div>';
+
+        for (var i = 0; i < fields.length; i++) {
+            var f = fields[i];
+            if (!f.name || !f.type) continue;
+
+            var reqMark = f.required ? '<span class="required">*</span>' : '';
+            var label = f.label || f.name;
+            var fieldId = 'field_' + f.name;
+
+            html += '<div class="form-field" data-name="' + esc(f.name) + '">';
+            html += '<label for="' + fieldId + '">' + esc(label) + reqMark + '</label>';
+
+            switch (f.type) {
+                case 'text': case 'email': case 'password': case 'tel': case 'url': case 'date':
+                    html += '<input type="' + f.type + '" id="' + fieldId + '" ' +
+                        'placeholder="' + esc(f.placeholder || '') + '" ' +
+                        (f.minLength ? 'minlength="' + f.minLength + '" ' : '') +
+                        (f.maxLength ? 'maxlength="' + f.maxLength + '" ' : '') +
+                        'oninput="validateField(\'' + esc(f.name) + '\')" ' +
+                        'onblur="validateField(\'' + esc(f.name) + '\')">';
+                    break;
+
+                case 'number':
+                    html += '<input type="number" id="' + fieldId + '" ' +
+                        (f.min !== undefined ? 'min="' + f.min + '" ' : '') +
+                        (f.max !== undefined ? 'max="' + f.max + '" ' : '') +
+                        (f.step ? 'step="' + f.step + '" ' : '') +
+                        'oninput="validateField(\'' + esc(f.name) + '\')" ' +
+                        'onblur="validateField(\'' + esc(f.name) + '\')">';
+                    break;
+
+                case 'textarea':
+                    html += '<textarea id="' + fieldId + '" ' +
+                        'rows="' + (f.rows || 3) + '" ' +
+                        'placeholder="' + esc(f.placeholder || '') + '" ' +
+                        (f.maxLength ? 'maxlength="' + f.maxLength + '" ' : '') +
+                        'oninput="validateField(\'' + esc(f.name) + '\')" ' +
+                        'onblur="validateField(\'' + esc(f.name) + '\')"></textarea>';
+                    break;
+
+                case 'select':
+                    html += '<select id="' + fieldId + '" onchange="validateField(\'' + esc(f.name) + '\')">';
+                    html += '<option value="">— Seleccionar —</option>';
+                    if (f.options) {
+                        for (var o = 0; o < f.options.length; o++) {
+                            html += '<option value="' + esc(f.options[o]) + '">' + esc(f.options[o]) + '</option>';
+                        }
+                    }
+                    html += '</select>';
+                    break;
+
+                case 'checkbox':
+                    var checked = f["default"] ? ' checked' : '';
+                    html += '<div class="check-group"><label class="check-item">' +
+                        '<input type="checkbox" id="' + fieldId + '"' + checked + '> Sí</label></div>';
+                    break;
+
+                case 'radio':
+                    html += '<div class="check-group">';
+                    if (f.options) {
+                        for (var o = 0; o < f.options.length; o++) {
+                            html += '<label class="check-item"><input type="radio" name="' + esc(f.name) + '" value="' + esc(f.options[o]) + '" ' +
+                                'onchange="validateField(\'' + esc(f.name) + '\')"> ' + esc(f.options[o]) + '</label>';
+                        }
+                    }
+                    html += '</div>';
+                    break;
+
+                case 'range':
+                    var min = f.min !== undefined ? f.min : 0;
+                    var max = f.max !== undefined ? f.max : 100;
+                    var step = f.step || 1;
+                    var def = f["default"] !== undefined ? f["default"] : Math.round((min + max) / 2);
+                    html += '<div class="range-wrapper">' +
+                        '<span>' + min + '</span>' +
+                        '<input type="range" id="' + fieldId + '" min="' + min + '" max="' + max + '" step="' + step + '" value="' + def + '" ' +
+                        'oninput="document.getElementById(\'rv_' + f.name + '\').textContent=this.value">' +
+                        '<span>' + max + '</span>' +
+                        '<span class="range-value" id="rv_' + f.name + '">' + def + '</span></div>';
+                    break;
+
+                case 'color':
+                    html += '<div class="color-wrapper">' +
+                        '<input type="color" id="' + fieldId + '" value="#3b82f6" ' +
+                        'oninput="document.getElementById(\'cv_' + f.name + '\').textContent=this.value">' +
+                        '<span class="color-hex" id="cv_' + f.name + '">#3b82f6</span></div>';
+                    break;
+
+                default:
+                    html += '<div style="color:var(--orange); font-size:12px;">⚠ Tipo no soportado: ' + esc(f.type) + '</div>';
+            }
+
+            html += '<div class="field-error" id="err_' + esc(f.name) + '"></div>';
+            html += '</div>';
+        }
+
+        html += '<div class="form-submit">';
+        html += '<button onclick="submitForm()">✅ Enviar</button>';
+        html += '<button class="btn-clear" onclick="clearForm()">🗑 Limpiar</button>';
+        html += '</div>';
+        html += '<div class="form-output" id="formOutput"></div>';
+
+        panel.innerHTML = html;
+        updateStats(fields.length, fields.filter(function(f) { return f.required; }).length, 0);
+    }
+
+    function esc(s) {
+        if (typeof s !== 'string') return '';
+        return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    // ═══════════════════════════════════════════════════
+    // VALIDATION
+    // ═══════════════════════════════════════════════════
+
+    function getFieldDef(name) {
+        for (var i = 0; i < currentSchema.length; i++) {
+            if (currentSchema[i].name === name) return currentSchema[i];
+        }
+        return null;
+    }
+
+    function validateField(name) {
+        var f = getFieldDef(name);
+        if (!f) return true;
+
+        var el = document.getElementById('field_' + name);
+        var errEl = document.getElementById('err_' + name);
+        if (!el || !errEl) return true;
+
+        var value;
+        if (f.type === 'radio') {
+            var radios = document.querySelectorAll('input[name="' + name + '"]');
+            value = '';
+            for (var r = 0; r < radios.length; r++) {
+                if (radios[r].checked) { value = radios[r].value; break; }
+            }
+        } else if (f.type === 'checkbox') {
+            value = el.checked;
+        } else {
+            value = el.value;
+        }
+
+        var error = '';
+
+        // Required
+        if (f.required && (value === '' || value === null || value === undefined)) {
+            error = 'Este campo es obligatorio';
+        }
+
+        if (!error && value !== '' && f.type !== 'checkbox') {
+            // MinLength
+            if (f.minLength && typeof value === 'string' && value.length < f.minLength) {
+                error = 'Mínimo ' + f.minLength + ' caracteres';
+            }
+            // MaxLength
+            if (f.maxLength && typeof value === 'string' && value.length > f.maxLength) {
+                error = 'Máximo ' + f.maxLength + ' caracteres';
+            }
+            // Min/Max for numbers
+            if (f.type === 'number') {
+                var num = parseFloat(value);
+                if (isNaN(num)) { error = 'Debe ser un número'; }
+                else if (f.min !== undefined && num < f.min) { error = 'Mínimo: ' + f.min; }
+                else if (f.max !== undefined && num > f.max) { error = 'Máximo: ' + f.max; }
+            }
+            // Email basic
+            if (f.type === 'email' && value && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+                error = 'Email no válido';
+            }
+            // Pattern
+            if (f.pattern && value) {
+                try {
+                    if (!new RegExp(f.pattern).test(value)) { error = 'Formato no válido'; }
+                } catch (e) { /* ignore bad pattern */ }
+            }
+        }
+
+        // Update UI
+        if (error) {
+            errEl.textContent = error;
+            errEl.classList.add('visible');
+            if (el.classList) { el.classList.remove('valid'); el.classList.add('invalid'); }
+        } else {
+            errEl.textContent = '';
+            errEl.classList.remove('visible');
+            if (el.classList && value !== '') { el.classList.remove('invalid'); el.classList.add('valid'); }
+            else if (el.classList) { el.classList.remove('invalid', 'valid'); }
+        }
+
+        recountValid();
+        return !error;
+    }
+
+    function recountValid() {
+        var validCount = 0;
+        var totalValidatable = 0;
+        for (var i = 0; i < currentSchema.length; i++) {
+            var f = currentSchema[i];
+            if (f.type === 'range' || f.type === 'color') continue;
+            totalValidatable++;
+            var el = document.getElementById('field_' + f.name);
+            if (el && el.classList && el.classList.contains('valid')) validCount++;
+        }
+        document.getElementById('statValid').textContent = validCount;
+    }
+
+    // ═══════════════════════════════════════════════════
+    // SUBMIT & CLEAR
+    // ═══════════════════════════════════════════════════
+
+    function submitForm() {
+        var allValid = true;
+        var data = {};
+        var firstInvalid = null;
+
+        for (var i = 0; i < currentSchema.length; i++) {
+            var f = currentSchema[i];
+            var valid = validateField(f.name);
+            if (!valid && !firstInvalid) firstInvalid = f.name;
+            if (!valid) allValid = false;
+
+            // Collect value
+            var el = document.getElementById('field_' + f.name);
+            if (f.type === 'radio') {
+                var radios = document.querySelectorAll('input[name="' + f.name + '"]');
+                data[f.name] = '';
+                for (var r = 0; r < radios.length; r++) {
+                    if (radios[r].checked) { data[f.name] = radios[r].value; break; }
+                }
+            } else if (f.type === 'checkbox') {
+                data[f.name] = el ? el.checked : false;
+            } else if (f.type === 'number') {
+                data[f.name] = el ? parseFloat(el.value) || null : null;
+            } else if (f.type === 'range') {
+                data[f.name] = el ? parseInt(el.value) : 0;
+            } else {
+                data[f.name] = el ? el.value : '';
+            }
+        }
+
+        var output = document.getElementById('formOutput');
+        if (allValid) {
+            output.textContent = '✅ Formulario válido. Datos:\n\n' + JSON.stringify(data, null, 2);
+            output.style.borderLeft = '4px solid var(--green)';
+        } else {
+            output.textContent = '❌ Formulario con errores. Corrige los campos marcados en rojo.';
+            output.style.borderLeft = '4px solid var(--red)';
+            if (firstInvalid) {
+                var errField = document.getElementById('field_' + firstInvalid);
+                if (errField) errField.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        }
+        output.classList.add('visible');
+    }
+
+    function clearForm() {
+        for (var i = 0; i < currentSchema.length; i++) {
+            var f = currentSchema[i];
+            var el = document.getElementById('field_' + f.name);
+            if (!el) continue;
+            if (f.type === 'checkbox') { el.checked = !!f["default"]; }
+            else if (f.type === 'range') { el.value = f["default"] || 0; var rv = document.getElementById('rv_' + f.name); if (rv) rv.textContent = el.value; }
+            else if (f.type === 'radio') {
+                var radios = document.querySelectorAll('input[name="' + f.name + '"]');
+                for (var r = 0; r < radios.length; r++) radios[r].checked = false;
+            }
+            else { el.value = ''; }
+            if (el.classList) el.classList.remove('valid', 'invalid');
+            var errEl = document.getElementById('err_' + f.name);
+            if (errEl) { errEl.textContent = ''; errEl.classList.remove('visible'); }
+        }
+        var output = document.getElementById('formOutput');
+        output.classList.remove('visible');
+        recountValid();
+    }
+
+    // ═══════════════════════════════════════════════════
+    // STATS
+    // ═══════════════════════════════════════════════════
+
+    function updateStats(total, required, valid) {
+        document.getElementById('statFields').textContent = total;
+        document.getElementById('statRequired').textContent = required;
+        document.getElementById('statTotal').textContent = total;
+        document.getElementById('statValid').textContent = valid;
+    }
+
+    // ═══════════════════════════════════════════════════
+    // LOAD EXAMPLES
+    // ═══════════════════════════════════════════════════
+
+    function loadExample() {
+        document.getElementById('jsonEditor').value = JSON.stringify(EXAMPLE_SCHEMA, null, 2);
+        onEditorChange();
+    }
+
+    function loadMinimal() {
+        document.getElementById('jsonEditor').value = JSON.stringify(MINIMAL_SCHEMA, null, 2);
+        onEditorChange();
+    }
+
+    function onEditorChange() {
+        var json = document.getElementById('jsonEditor').value;
+        if (!json.trim()) {
+            document.getElementById('formPanel').innerHTML = '<div class="form-empty">Escribe un esquema JSON para generar el formulario</div>';
+            document.getElementById('jsonError').classList.remove('visible');
+            updateStats(0, 0, 0);
+            return;
+        }
+        var schema = parseSchema(json);
+        if (schema) renderForm(schema);
+    }
+
+    // ── Event listener ──
+    document.getElementById('jsonEditor').addEventListener('input', onEditorChange);
+
+    // Tab key inserts spaces
+    document.getElementById('jsonEditor').addEventListener('keydown', function(e) {
+        if (e.key === 'Tab') {
+            e.preventDefault();
+            var s = this.selectionStart;
+            this.setRangeText('  ', s, s, 'end');
+        }
+    });
+
+    // ── Initial load ──
+    loadExample();
+</script>
+
+</body>
+</html>

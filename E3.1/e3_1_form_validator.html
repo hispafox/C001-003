@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>E3.1 — Validador de Formularios</title>
+    <style>
+        *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+        body{font-family:'Segoe UI',system-ui,sans-serif;background:#0a0e1a;color:#e2e8f0;min-height:100vh;display:flex;justify-content:center;padding:24px}
+        .container{max-width:520px;width:100%}
+        h1{text-align:center;font-size:22px;margin-bottom:4px;background:linear-gradient(135deg,#60a5fa,#a78bfa);-webkit-background-clip:text;-webkit-text-fill-color:transparent;font-weight:800}
+        .subtitle{text-align:center;color:#64748b;font-size:13px;margin-bottom:24px}
+        .card{background:#131a2e;border:1px solid #1e2d4a;border-radius:12px;padding:24px;margin-bottom:16px}
+
+        /* Fields */
+        .field{margin-bottom:20px;position:relative}
+        .field label{display:block;font-size:13px;font-weight:600;color:#94a3b8;margin-bottom:6px}
+        .field label .req{color:#ef4444;margin-left:2px}
+        .input-wrap{position:relative}
+        .field input{width:100%;background:#0f172a;color:#e2e8f0;border:2px solid #334155;border-radius:8px;padding:12px 40px 12px 14px;font-size:14px;outline:none;transition:border-color .2s,box-shadow .2s;font-family:inherit}
+        .field input:focus{border-color:#3b82f6;box-shadow:0 0 0 3px rgba(59,130,246,.15)}
+        .field input.valid{border-color:#22c55e;box-shadow:0 0 0 3px rgba(34,197,94,.1)}
+        .field input.invalid{border-color:#ef4444;box-shadow:0 0 0 3px rgba(239,68,68,.1)}
+        .status-icon{position:absolute;right:12px;top:50%;transform:translateY(-50%);font-size:18px;pointer-events:none;transition:opacity .2s}
+        .field-msg{font-size:12px;margin-top:4px;min-height:16px;transition:color .2s}
+        .field-msg.error{color:#fca5a5}
+        .field-msg.success{color:#86efac}
+
+        /* Password strength */
+        .strength-bar{height:6px;background:#1e293b;border-radius:3px;margin-top:8px;overflow:hidden}
+        .strength-fill{height:100%;border-radius:3px;transition:width .3s,background .3s}
+        .strength-text{font-size:12px;margin-top:4px;font-weight:600}
+        .pw-checks{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+        .pw-check{font-size:11px;padding:2px 8px;border-radius:10px;background:#1e293b;color:#64748b;transition:all .2s}
+        .pw-check.pass{background:rgba(34,197,94,.15);color:#86efac}
+
+        /* Progress */
+        .progress-section{text-align:center;margin-bottom:16px}
+        .progress-text{font-size:13px;color:#94a3b8;margin-bottom:6px}
+        .progress-text span{color:#60a5fa;font-weight:700}
+        .progress-track{height:8px;background:#1e293b;border-radius:4px;overflow:hidden}
+        .progress-fill{height:100%;border-radius:4px;background:linear-gradient(90deg,#3b82f6,#22c55e);transition:width .4s}
+
+        /* Submit */
+        .btn-submit{width:100%;padding:14px;background:linear-gradient(135deg,#3b82f6,#8b5cf6);color:white;border:none;border-radius:10px;font-size:16px;font-weight:700;cursor:pointer;transition:all .2s;opacity:.4;pointer-events:none}
+        .btn-submit.enabled{opacity:1;pointer-events:auto}
+        .btn-submit.enabled:hover{transform:translateY(-2px);box-shadow:0 4px 20px rgba(59,130,246,.4)}
+
+        /* Success overlay */
+        .success-overlay{display:none;position:fixed;inset:0;background:rgba(10,14,26,.9);z-index:100;justify-content:center;align-items:center;flex-direction:column}
+        .success-overlay.visible{display:flex}
+        .success-icon{font-size:72px;margin-bottom:16px;animation:bounce .6s ease}
+        .success-title{font-size:24px;font-weight:700;color:#22c55e;margin-bottom:8px}
+        .success-sub{color:#94a3b8;font-size:14px;margin-bottom:24px}
+        .success-data{background:#0f172a;border-radius:8px;padding:16px;font-family:'Fira Code',monospace;font-size:12px;color:#94a3b8;max-width:400px;width:90%;white-space:pre-wrap}
+        .btn-back{margin-top:16px;background:#1e293b;color:#e2e8f0;border:1px solid #334155;border-radius:8px;padding:10px 24px;cursor:pointer;font-size:14px}
+        .btn-back:hover{border-color:#3b82f6}
+        @keyframes bounce{0%,100%{transform:scale(1)}50%{transform:scale(1.2)}}
+
+        @media(max-width:500px){body{padding:12px}.card{padding:16px}}
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>📋 Validador de Formularios</h1>
+    <p class="subtitle">Validación en tiempo real con feedback visual — Todos los campos son obligatorios</p>
+
+    <div class="progress-section">
+        <div class="progress-text"><span id="validCount">0</span> de 6 campos válidos</div>
+        <div class="progress-track"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+    </div>
+
+    <div class="card">
+        <div class="field" id="f-name">
+            <label>Nombre completo <span class="req">*</span></label>
+            <div class="input-wrap">
+                <input type="text" id="inpName" placeholder="Ej: María García López" oninput="checkName()" onblur="checkName()">
+                <span class="status-icon" id="icoName"></span>
+            </div>
+            <div class="field-msg" id="msgName"></div>
+        </div>
+
+        <div class="field" id="f-email">
+            <label>Email <span class="req">*</span></label>
+            <div class="input-wrap">
+                <input type="text" id="inpEmail" placeholder="usuario@dominio.com" oninput="checkEmail()" onblur="checkEmail()">
+                <span class="status-icon" id="icoEmail"></span>
+            </div>
+            <div class="field-msg" id="msgEmail"></div>
+        </div>
+
+        <div class="field" id="f-pass">
+            <label>Contraseña <span class="req">*</span></label>
+            <div class="input-wrap">
+                <input type="password" id="inpPass" placeholder="Mínimo 8 caracteres" oninput="checkPass();checkPassConfirm()" onblur="checkPass()">
+                <span class="status-icon" id="icoPass"></span>
+            </div>
+            <div class="strength-bar"><div class="strength-fill" id="strFill" style="width:0%"></div></div>
+            <div class="strength-text" id="strText"></div>
+            <div class="pw-checks">
+                <span class="pw-check" id="chkLen">8+ chars</span>
+                <span class="pw-check" id="chkUpper">Mayúscula</span>
+                <span class="pw-check" id="chkLower">Minúscula</span>
+                <span class="pw-check" id="chkNum">Número</span>
+                <span class="pw-check" id="chkSym">Símbolo</span>
+            </div>
+            <div class="field-msg" id="msgPass"></div>
+        </div>
+
+        <div class="field" id="f-passconf">
+            <label>Confirmar contraseña <span class="req">*</span></label>
+            <div class="input-wrap">
+                <input type="password" id="inpPassconf" placeholder="Repite la contraseña" oninput="checkPassConfirm()" onblur="checkPassConfirm()">
+                <span class="status-icon" id="icoPassconf"></span>
+            </div>
+            <div class="field-msg" id="msgPassconf"></div>
+        </div>
+
+        <div class="field" id="f-phone">
+            <label>Teléfono <span class="req">*</span></label>
+            <div class="input-wrap">
+                <input type="tel" id="inpPhone" placeholder="+34 612 345 678" oninput="checkPhone()" onblur="checkPhone()">
+                <span class="status-icon" id="icoPhone"></span>
+            </div>
+            <div class="field-msg" id="msgPhone"></div>
+        </div>
+
+        <div class="field" id="f-dob">
+            <label>Fecha de nacimiento <span class="req">*</span></label>
+            <div class="input-wrap">
+                <input type="date" id="inpDob" oninput="checkDob()" onblur="checkDob()">
+                <span class="status-icon" id="icoDob"></span>
+            </div>
+            <div class="field-msg" id="msgDob"></div>
+        </div>
+    </div>
+
+    <button class="btn-submit" id="btnSubmit" onclick="submitForm()">✅ Enviar Formulario</button>
+</div>
+
+<div class="success-overlay" id="successOverlay">
+    <div class="success-icon">🎉</div>
+    <div class="success-title">¡Formulario enviado!</div>
+    <div class="success-sub">Todos los campos son válidos</div>
+    <div class="success-data" id="successData"></div>
+    <button class="btn-back" onclick="closeSuccess()">← Volver</button>
+</div>
+
+<script>
+    var fieldStatus = { name: false, email: false, pass: false, passconf: false, phone: false, dob: false };
+
+    function setField(id, valid, msg) {
+        var inp = document.getElementById("inp" + id.charAt(0).toUpperCase() + id.slice(1));
+        var ico = document.getElementById("ico" + id.charAt(0).toUpperCase() + id.slice(1));
+        var msgEl = document.getElementById("msg" + id.charAt(0).toUpperCase() + id.slice(1));
+        if (!inp) return;
+        var val = inp.value;
+
+        if (!val && !msg) {
+            inp.classList.remove("valid", "invalid");
+            ico.textContent = "";
+            msgEl.textContent = "";
+            msgEl.className = "field-msg";
+            fieldStatus[id] = false;
+        } else if (valid) {
+            inp.classList.remove("invalid"); inp.classList.add("valid");
+            ico.textContent = "✅";
+            msgEl.textContent = msg || "";
+            msgEl.className = "field-msg success";
+            fieldStatus[id] = true;
+        } else {
+            inp.classList.remove("valid"); inp.classList.add("invalid");
+            ico.textContent = "❌";
+            msgEl.textContent = msg || "";
+            msgEl.className = "field-msg error";
+            fieldStatus[id] = false;
+        }
+        updateProgress();
+    }
+
+    // Name: letters, spaces, accents, min 2
+    function checkName() {
+        var v = document.getElementById("inpName").value.trim();
+        if (!v) { setField("name", false, ""); return; }
+        if (v.length < 2) { setField("name", false, "Mínimo 2 caracteres"); return; }
+        if (!/^[a-zA-ZáéíóúüñÁÉÍÓÚÜÑ\s]+$/.test(v)) { setField("name", false, "Solo letras y espacios"); return; }
+        setField("name", true, "Nombre válido");
+    }
+
+    // Email
+    function checkEmail() {
+        var v = document.getElementById("inpEmail").value.trim();
+        if (!v) { setField("email", false, ""); return; }
+        if (!/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?)*\.[a-zA-Z]{2,}$/.test(v)) {
+            setField("email", false, "Formato de email no válido"); return;
+        }
+        setField("email", true, "Email válido");
+    }
+
+    // Password with strength
+    function checkPass() {
+        var v = document.getElementById("inpPass").value;
+        var hasLen = v.length >= 8;
+        var hasUpper = /[A-Z]/.test(v);
+        var hasLower = /[a-z]/.test(v);
+        var hasNum = /[0-9]/.test(v);
+        var hasSym = /[^a-zA-Z0-9]/.test(v);
+
+        // Update checklist
+        document.getElementById("chkLen").className = "pw-check" + (hasLen ? " pass" : "");
+        document.getElementById("chkUpper").className = "pw-check" + (hasUpper ? " pass" : "");
+        document.getElementById("chkLower").className = "pw-check" + (hasLower ? " pass" : "");
+        document.getElementById("chkNum").className = "pw-check" + (hasNum ? " pass" : "");
+        document.getElementById("chkSym").className = "pw-check" + (hasSym ? " pass" : "");
+
+        var score = (hasLen ? 1 : 0) + (hasUpper ? 1 : 0) + (hasLower ? 1 : 0) + (hasNum ? 1 : 0) + (hasSym ? 1 : 0);
+        if (v.length >= 12) score += 0.5;
+        if (v.length >= 16) score += 0.5;
+
+        var fill = document.getElementById("strFill");
+        var text = document.getElementById("strText");
+        var pct = Math.min(100, Math.round(score / 6 * 100));
+
+        if (!v) { fill.style.width = "0%"; fill.style.background = "#334155"; text.textContent = ""; text.style.color = "#64748b"; setField("pass", false, ""); return; }
+
+        fill.style.width = pct + "%";
+        if (score < 2) { fill.style.background = "#ef4444"; text.textContent = "Débil"; text.style.color = "#fca5a5"; }
+        else if (score < 3) { fill.style.background = "#f97316"; text.textContent = "Media"; text.style.color = "#fdba74"; }
+        else if (score < 4) { fill.style.background = "#eab308"; text.textContent = "Buena"; text.style.color = "#fde047"; }
+        else if (score < 5) { fill.style.background = "#22c55e"; text.textContent = "Fuerte"; text.style.color = "#86efac"; }
+        else { fill.style.background = "#10b981"; text.textContent = "Muy fuerte"; text.style.color = "#6ee7b7"; }
+
+        var allOk = hasLen && hasUpper && hasLower && hasNum && hasSym;
+        if (!allOk) {
+            var missing = [];
+            if (!hasLen) missing.push("8+ caracteres");
+            if (!hasUpper) missing.push("mayúscula");
+            if (!hasLower) missing.push("minúscula");
+            if (!hasNum) missing.push("número");
+            if (!hasSym) missing.push("símbolo");
+            setField("pass", false, "Falta: " + missing.join(", "));
+        } else {
+            setField("pass", true, "Contraseña segura");
+        }
+    }
+
+    // Confirm password
+    function checkPassConfirm() {
+        var p1 = document.getElementById("inpPass").value;
+        var p2 = document.getElementById("inpPassconf").value;
+        if (!p2) { setField("passconf", false, ""); return; }
+        if (p1 !== p2) { setField("passconf", false, "Las contraseñas no coinciden"); return; }
+        if (!fieldStatus.pass) { setField("passconf", false, "La contraseña principal no es válida aún"); return; }
+        setField("passconf", true, "Las contraseñas coinciden");
+    }
+
+    // Phone: flexible, 9+ digits
+    function checkPhone() {
+        var v = document.getElementById("inpPhone").value.trim();
+        if (!v) { setField("phone", false, ""); return; }
+        var digits = v.replace(/\D/g, "");
+        if (digits.length < 9) { setField("phone", false, "Mínimo 9 dígitos"); return; }
+        if (digits.length > 15) { setField("phone", false, "Máximo 15 dígitos"); return; }
+        setField("phone", true, "Teléfono válido");
+    }
+
+    // Date of birth: 18+, not future
+    function checkDob() {
+        var v = document.getElementById("inpDob").value;
+        if (!v) { setField("dob", false, ""); return; }
+        var dob = new Date(v);
+        var today = new Date();
+        if (dob > today) { setField("dob", false, "La fecha no puede ser futura"); return; }
+        var age = today.getFullYear() - dob.getFullYear();
+        var m = today.getMonth() - dob.getMonth();
+        if (m < 0 || (m === 0 && today.getDate() < dob.getDate())) age--;
+        if (age < 18) { setField("dob", false, "Debes ser mayor de 18 años (tienes " + age + ")"); return; }
+        setField("dob", true, "Edad: " + age + " años");
+    }
+
+    // Progress
+    function updateProgress() {
+        var count = 0;
+        var keys = Object.keys(fieldStatus);
+        for (var i = 0; i < keys.length; i++) { if (fieldStatus[keys[i]]) count++; }
+        document.getElementById("validCount").textContent = count;
+        document.getElementById("progressFill").style.width = Math.round(count / 6 * 100) + "%";
+        var btn = document.getElementById("btnSubmit");
+        if (count === 6) { btn.classList.add("enabled"); } else { btn.classList.remove("enabled"); }
+    }
+
+    // Submit
+    function submitForm() {
+        var data = {
+            nombre: document.getElementById("inpName").value.trim(),
+            email: document.getElementById("inpEmail").value.trim(),
+            telefono: document.getElementById("inpPhone").value.trim(),
+            fecha_nacimiento: document.getElementById("inpDob").value
+        };
+        document.getElementById("successData").textContent = JSON.stringify(data, null, 2);
+        document.getElementById("successOverlay").classList.add("visible");
+    }
+
+    function closeSuccess() {
+        document.getElementById("successOverlay").classList.remove("visible");
+    }
+</script>
+</body>
+</html>

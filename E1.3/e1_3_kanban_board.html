@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>E1.3 — Kanban Board</title>
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --bg: #0f172a;
+            --surface: #1e293b;
+            --surface2: #334155;
+            --border: #475569;
+            --text: #e2e8f0;
+            --text-dim: #94a3b8;
+            --blue: #3b82f6;
+            --green: #22c55e;
+            --red: #ef4444;
+            --orange: #f97316;
+            --purple: #a855f7;
+            --yellow: #eab308;
+            --card-bg: #1e293b;
+            --card-hover: #253349;
+            --shadow: 0 4px 12px rgba(0,0,0,0.3);
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* ── Header ── */
+        header {
+            background: var(--surface);
+            padding: 16px 24px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        header h1 { font-size: 20px; }
+        header h1 span { font-size: 14px; color: var(--text-dim); font-weight: 400; margin-left: 8px; }
+
+        .header-actions { display: flex; gap: 8px; }
+
+        .btn {
+            background: var(--surface2);
+            color: var(--text);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 8px 14px;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .btn:hover { background: var(--blue); border-color: var(--blue); color: white; }
+        .btn-primary { background: var(--blue); border-color: var(--blue); color: white; }
+        .btn-primary:hover { background: #2563eb; }
+        .btn-danger { background: transparent; border-color: var(--red); color: var(--red); }
+        .btn-danger:hover { background: var(--red); color: white; }
+
+        /* ── Add task form ── */
+        .add-form {
+            background: var(--surface);
+            padding: 16px 24px;
+            border-bottom: 1px solid var(--border);
+            display: none;
+            gap: 12px;
+            align-items: flex-end;
+            flex-wrap: wrap;
+        }
+
+        .add-form.visible { display: flex; }
+
+        .form-group { display: flex; flex-direction: column; gap: 4px; }
+        .form-group label { font-size: 12px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; }
+
+        .form-group input, .form-group select, .form-group textarea {
+            background: var(--bg);
+            color: var(--text);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 8px 12px;
+            font-size: 13px;
+            font-family: inherit;
+            outline: none;
+        }
+
+        .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+            border-color: var(--blue);
+        }
+
+        .form-group textarea { resize: vertical; height: 36px; }
+
+        /* ── Filter bar ── */
+        .filter-bar {
+            padding: 12px 24px;
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .filter-bar span { font-size: 13px; color: var(--text-dim); margin-right: 4px; }
+
+        .filter-btn {
+            background: var(--surface);
+            color: var(--text-dim);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 4px 14px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .filter-btn:hover { border-color: var(--blue); color: var(--text); }
+        .filter-btn.active { background: var(--blue); border-color: var(--blue); color: white; }
+
+        /* ── Board ── */
+        .board {
+            flex: 1;
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+            padding: 16px 24px;
+            overflow-x: auto;
+            align-items: start;
+        }
+
+        .column {
+            background: var(--surface);
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            min-height: 300px;
+        }
+
+        .column-header {
+            padding: 14px 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid var(--border);
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        .column-header .dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 8px;
+            display: inline-block;
+        }
+
+        .column-header .count {
+            background: var(--bg);
+            padding: 2px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            color: var(--text-dim);
+            font-weight: 400;
+        }
+
+        .column-body {
+            padding: 12px;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            min-height: 100px;
+        }
+
+        /* ── Cards ── */
+        .card {
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 14px;
+            cursor: grab;
+            transition: box-shadow 0.2s, border-color 0.2s;
+            position: relative;
+        }
+
+        .card:hover {
+            border-color: var(--blue);
+            box-shadow: var(--shadow);
+        }
+
+        .card.sortable-ghost {
+            opacity: 0.4;
+            border: 2px dashed var(--blue);
+        }
+
+        .card.sortable-chosen {
+            box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+        }
+
+        .card-title {
+            font-weight: 600;
+            font-size: 14px;
+            margin-bottom: 6px;
+            outline: none;
+            border-radius: 4px;
+            padding: 2px 4px;
+            margin: -2px -4px 4px;
+        }
+
+        .card-title:focus {
+            background: var(--surface2);
+            box-shadow: 0 0 0 2px var(--blue);
+        }
+
+        .card-desc {
+            font-size: 12px;
+            color: var(--text-dim);
+            margin-bottom: 10px;
+            line-height: 1.5;
+        }
+
+        .card-footer {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .badge {
+            padding: 2px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .badge-alta { background: rgba(239, 68, 68, 0.2); color: #fca5a5; }
+        .badge-media { background: rgba(249, 115, 22, 0.2); color: #fdba74; }
+        .badge-baja { background: rgba(34, 197, 94, 0.2); color: #86efac; }
+
+        .card-date { font-size: 11px; color: var(--text-dim); }
+
+        .card-delete {
+            position: absolute;
+            top: 8px;
+            right: 10px;
+            background: none;
+            border: none;
+            color: var(--text-dim);
+            font-size: 16px;
+            cursor: pointer;
+            opacity: 0;
+            transition: opacity 0.15s, color 0.15s;
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+
+        .card:hover .card-delete { opacity: 1; }
+        .card-delete:hover { color: var(--red); background: rgba(239, 68, 68, 0.1); }
+
+        /* ── Empty column placeholder ── */
+        .column-empty {
+            text-align: center;
+            color: var(--text-dim);
+            font-size: 13px;
+            padding: 20px;
+            opacity: 0.5;
+        }
+
+        /* ── Toast ── */
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: var(--green);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-size: 14px;
+            opacity: 0;
+            transition: opacity 0.3s;
+            z-index: 100;
+            pointer-events: none;
+        }
+        .toast.show { opacity: 1; }
+
+        /* ── Responsive ── */
+        @media (max-width: 900px) {
+            .board { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>📋 Kanban Board <span>— Gestor de Tareas</span></h1>
+    <div class="header-actions">
+        <button class="btn btn-primary" onclick="toggleForm()">+ Nueva tarea</button>
+        <button class="btn btn-danger" onclick="resetBoard()">🗑 Reiniciar</button>
+    </div>
+</header>
+
+<div class="add-form" id="addForm">
+    <div class="form-group" style="flex:2; min-width:200px;">
+        <label>Título</label>
+        <input type="text" id="newTitle" placeholder="Ej: Implementar login">
+    </div>
+    <div class="form-group" style="flex:3; min-width:200px;">
+        <label>Descripción</label>
+        <textarea id="newDesc" placeholder="Descripción breve de la tarea"></textarea>
+    </div>
+    <div class="form-group">
+        <label>Prioridad</label>
+        <select id="newPriority">
+            <option value="alta">🔴 Alta</option>
+            <option value="media" selected>🟠 Media</option>
+            <option value="baja">🟢 Baja</option>
+        </select>
+    </div>
+    <button class="btn btn-primary" onclick="addTask()">Añadir</button>
+</div>
+
+<div class="filter-bar">
+    <span>Filtrar:</span>
+    <button class="filter-btn active" onclick="setFilter('todas', this)">Todas</button>
+    <button class="filter-btn" onclick="setFilter('alta', this)">🔴 Alta</button>
+    <button class="filter-btn" onclick="setFilter('media', this)">🟠 Media</button>
+    <button class="filter-btn" onclick="setFilter('baja', this)">🟢 Baja</button>
+</div>
+
+<div class="board">
+    <div class="column">
+        <div class="column-header">
+            <div><span class="dot" style="background:var(--blue)"></span>Por Hacer <span class="count" id="countTodo">0</span></div>
+        </div>
+        <div class="column-body" id="todo"></div>
+    </div>
+    <div class="column">
+        <div class="column-header">
+            <div><span class="dot" style="background:var(--orange)"></span>En Progreso <span class="count" id="countProgress">0</span></div>
+        </div>
+        <div class="column-body" id="progress"></div>
+    </div>
+    <div class="column">
+        <div class="column-header">
+            <div><span class="dot" style="background:var(--green)"></span>Completado <span class="count" id="countDone">0</span></div>
+        </div>
+        <div class="column-body" id="done"></div>
+    </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+    // ═══════════════════════════════════════════════════
+    // DATA
+    // ═══════════════════════════════════════════════════
+
+    var STORAGE_KEY = 'kanban-tasks-v1';
+
+    var DEFAULT_TASKS = [
+        { id: 1, titulo: "Dise\u00f1ar API REST", desc: "Definir endpoints, modelos y validaciones para el servicio de tareas", prioridad: "alta", columna: "todo", fecha: "2026-03-01" },
+        { id: 2, titulo: "Configurar entorno CI/CD", desc: "Pipeline de GitHub Actions con tests y deploy autom\u00e1tico", prioridad: "media", columna: "todo", fecha: "2026-03-02" },
+        { id: 3, titulo: "Implementar autenticaci\u00f3n JWT", desc: "Login, registro, refresh token y middleware de validaci\u00f3n", prioridad: "alta", columna: "progress", fecha: "2026-03-03" },
+        { id: 4, titulo: "Escribir tests unitarios", desc: "Cobertura m\u00ednima del 80% con pytest y mocking", prioridad: "media", columna: "progress", fecha: "2026-03-04" },
+        { id: 5, titulo: "Crear modelo de datos", desc: "Esquema de base de datos con SQLAlchemy y migraciones Alembic", prioridad: "baja", columna: "done", fecha: "2026-02-25" },
+        { id: 6, titulo: "Setup del proyecto", desc: "Inicializar repositorio, pyproject.toml, estructura de carpetas", prioridad: "baja", columna: "done", fecha: "2026-02-20" },
+    ];
+
+    var nextId = 100;
+    var currentFilter = 'todas';
+
+    function loadTasks() {
+        try {
+            var saved = localStorage.getItem(STORAGE_KEY);
+            if (saved) {
+                var parsed = JSON.parse(saved);
+                if (Array.isArray(parsed) && parsed.length > 0) {
+                    return parsed;
+                }
+            }
+        } catch (e) {
+            console.warn('Error loading from localStorage:', e);
+        }
+        return DEFAULT_TASKS.slice();
+    }
+
+    function saveTasks(tasks) {
+        try {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
+        } catch (e) {
+            console.warn('Error saving to localStorage:', e);
+        }
+    }
+
+    function getTasks() {
+        return loadTasks();
+    }
+
+    // ═══════════════════════════════════════════════════
+    // RENDERING
+    // ═══════════════════════════════════════════════════
+
+    function renderBoard() {
+        var tasks = getTasks();
+        var columns = { todo: [], progress: [], done: [] };
+
+        for (var i = 0; i < tasks.length; i++) {
+            var t = tasks[i];
+            if (columns[t.columna]) {
+                columns[t.columna].push(t);
+            }
+        }
+
+        renderColumn('todo', columns.todo);
+        renderColumn('progress', columns.progress);
+        renderColumn('done', columns.done);
+
+        updateCounts();
+        initSortable();
+    }
+
+    function renderColumn(colId, tasks) {
+        var container = document.getElementById(colId);
+        container.innerHTML = '';
+
+        var visibleCount = 0;
+        for (var i = 0; i < tasks.length; i++) {
+            var t = tasks[i];
+            var visible = (currentFilter === 'todas' || t.prioridad === currentFilter);
+            if (visible) visibleCount++;
+
+            var card = document.createElement('div');
+            card.className = 'card';
+            card.setAttribute('data-id', t.id);
+            if (!visible) card.style.display = 'none';
+
+            card.innerHTML =
+                '<button class="card-delete" onclick="deleteTask(' + t.id + ')" title="Eliminar">\u00d7</button>' +
+                '<div class="card-title" contenteditable="false" ondblclick="this.contentEditable=true;this.focus();" ' +
+                'onblur="updateTitle(' + t.id + ', this)" ' +
+                'onkeydown="if(event.key===\'Enter\'){event.preventDefault();this.blur();}">' +
+                escapeHtml(t.titulo) + '</div>' +
+                '<div class="card-desc">' + escapeHtml(t.desc) + '</div>' +
+                '<div class="card-footer">' +
+                '<span class="badge badge-' + t.prioridad + '">' + t.prioridad + '</span>' +
+                '<span class="card-date">' + t.fecha + '</span>' +
+                '</div>';
+
+            container.appendChild(card);
+        }
+
+        if (visibleCount === 0) {
+            var empty = document.createElement('div');
+            empty.className = 'column-empty';
+            empty.textContent = currentFilter !== 'todas' ? 'Sin tareas con esta prioridad' : 'Arrastra tareas aqu\u00ed';
+            container.appendChild(empty);
+        }
+    }
+
+    function escapeHtml(text) {
+        var div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    function updateCounts() {
+        var tasks = getTasks();
+        var counts = { todo: 0, progress: 0, done: 0 };
+        for (var i = 0; i < tasks.length; i++) {
+            var t = tasks[i];
+            var visible = (currentFilter === 'todas' || t.prioridad === currentFilter);
+            if (visible && counts.hasOwnProperty(t.columna)) {
+                counts[t.columna]++;
+            }
+        }
+        document.getElementById('countTodo').textContent = counts.todo;
+        document.getElementById('countProgress').textContent = counts.progress;
+        document.getElementById('countDone').textContent = counts.done;
+    }
+
+    // ═══════════════════════════════════════════════════
+    // SORTABLE (drag & drop)
+    // ═══════════════════════════════════════════════════
+
+    var sortableInstances = [];
+
+    function initSortable() {
+        // Destroy previous instances
+        for (var i = 0; i < sortableInstances.length; i++) {
+            sortableInstances[i].destroy();
+        }
+        sortableInstances = [];
+
+        var colIds = ['todo', 'progress', 'done'];
+        for (var i = 0; i < colIds.length; i++) {
+            var el = document.getElementById(colIds[i]);
+            var s = new Sortable(el, {
+                group: 'kanban',
+                animation: 200,
+                ghostClass: 'sortable-ghost',
+                chosenClass: 'sortable-chosen',
+                draggable: '.card',
+                onEnd: function(evt) {
+                    var taskId = parseInt(evt.item.getAttribute('data-id'));
+                    var newColumn = evt.to.id;
+                    var tasks = getTasks();
+                    for (var j = 0; j < tasks.length; j++) {
+                        if (tasks[j].id === taskId) {
+                            tasks[j].columna = newColumn;
+                            break;
+                        }
+                    }
+                    saveTasks(tasks);
+                    updateCounts();
+                    showToast('Tarea movida');
+                }
+            });
+            sortableInstances.push(s);
+        }
+    }
+
+    // ═══════════════════════════════════════════════════
+    // ACTIONS
+    // ═══════════════════════════════════════════════════
+
+    function toggleForm() {
+        var form = document.getElementById('addForm');
+        form.classList.toggle('visible');
+        if (form.classList.contains('visible')) {
+            document.getElementById('newTitle').focus();
+        }
+    }
+
+    function addTask() {
+        var titulo = document.getElementById('newTitle').value.trim();
+        var desc = document.getElementById('newDesc').value.trim();
+        var prioridad = document.getElementById('newPriority').value;
+
+        if (!titulo) {
+            document.getElementById('newTitle').focus();
+            return;
+        }
+
+        var tasks = getTasks();
+        var today = new Date().toISOString().split('T')[0];
+
+        tasks.push({
+            id: nextId++,
+            titulo: titulo,
+            desc: desc || 'Sin descripci\u00f3n',
+            prioridad: prioridad,
+            columna: 'todo',
+            fecha: today
+        });
+
+        saveTasks(tasks);
+        renderBoard();
+
+        // Clear form
+        document.getElementById('newTitle').value = '';
+        document.getElementById('newDesc').value = '';
+        document.getElementById('newPriority').value = 'media';
+
+        showToast('\u2705 Tarea a\u00f1adida');
+    }
+
+    function deleteTask(id) {
+        var tasks = getTasks();
+        var filtered = [];
+        for (var i = 0; i < tasks.length; i++) {
+            if (tasks[i].id !== id) filtered.push(tasks[i]);
+        }
+        saveTasks(filtered);
+        renderBoard();
+        showToast('Tarea eliminada');
+    }
+
+    function updateTitle(id, element) {
+        element.contentEditable = false;
+        var newTitle = element.textContent.trim();
+        if (!newTitle) {
+            renderBoard();
+            return;
+        }
+        var tasks = getTasks();
+        for (var i = 0; i < tasks.length; i++) {
+            if (tasks[i].id === id) {
+                tasks[i].titulo = newTitle;
+                break;
+            }
+        }
+        saveTasks(tasks);
+    }
+
+    function setFilter(filter, btn) {
+        currentFilter = filter;
+
+        var buttons = document.querySelectorAll('.filter-btn');
+        for (var i = 0; i < buttons.length; i++) {
+            buttons[i].classList.remove('active');
+        }
+        btn.classList.add('active');
+
+        renderBoard();
+    }
+
+    function resetBoard() {
+        if (!confirm('\u00bfReiniciar el tablero? Se perder\u00e1n todas las tareas actuales.')) return;
+        localStorage.removeItem(STORAGE_KEY);
+        currentFilter = 'todas';
+        var buttons = document.querySelectorAll('.filter-btn');
+        for (var i = 0; i < buttons.length; i++) {
+            buttons[i].classList.remove('active');
+        }
+        buttons[0].classList.add('active');
+        renderBoard();
+        showToast('Tablero reiniciado');
+    }
+
+    function showToast(msg) {
+        var toast = document.getElementById('toast');
+        toast.textContent = msg;
+        toast.classList.add('show');
+        setTimeout(function() { toast.classList.remove('show'); }, 1500);
+    }
+
+    // Handle Enter in title input to add task
+    document.getElementById('newTitle').addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') { e.preventDefault(); addTask(); }
+    });
+
+    // ═══════════════════════════════════════════════════
+    // INIT
+    // ═══════════════════════════════════════════════════
+
+    renderBoard();
+</script>
+
+</body>
+</html>

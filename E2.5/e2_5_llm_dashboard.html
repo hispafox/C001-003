@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>E2.5 — Dashboard Comparativo de LLMs</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+        body{font-family:'Segoe UI',system-ui,sans-serif;background:#0a0e1a;color:#e2e8f0;min-height:100vh;padding:20px}
+        .container{max-width:1100px;margin:0 auto}
+        h1{font-size:24px;text-align:center;margin-bottom:4px;background:linear-gradient(135deg,#60a5fa,#a78bfa);-webkit-background-clip:text;-webkit-text-fill-color:transparent;font-weight:800}
+        .subtitle{text-align:center;color:#64748b;font-size:14px;margin-bottom:24px}
+        .card{background:#131a2e;border:1px solid #1e2d4a;border-radius:12px;padding:20px;margin-bottom:16px}
+        .card h2{font-size:16px;margin-bottom:16px;color:#94a3b8;text-transform:uppercase;letter-spacing:1px;font-size:12px}
+
+        /* Filters */
+        .filters{display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-bottom:16px}
+        .filters input[type=text]{background:#0f172a;color:#e2e8f0;border:1px solid #334155;border-radius:8px;padding:8px 14px;font-size:13px;outline:none;width:200px}
+        .filters input:focus{border-color:#3b82f6}
+        .chip{display:inline-flex;align-items:center;gap:4px;padding:4px 12px;border-radius:20px;font-size:12px;cursor:pointer;border:1px solid #334155;transition:all .15s;background:#0f172a;color:#94a3b8}
+        .chip:hover{border-color:#3b82f6}
+        .chip.active{border-color:var(--c,#3b82f6);background:var(--cbg,rgba(59,130,246,.15));color:var(--c,#60a5fa)}
+        .chip .dot{width:8px;height:8px;border-radius:50%}
+
+        /* Table */
+        .table-wrap{overflow-x:auto;border-radius:8px}
+        table{width:100%;border-collapse:collapse;font-size:13px}
+        th{background:#0f172a;padding:10px 14px;text-align:left;color:#64748b;font-size:11px;text-transform:uppercase;letter-spacing:.5px;cursor:pointer;white-space:nowrap;user-select:none;transition:color .15s}
+        th:hover{color:#e2e8f0}
+        th .arrow{font-size:10px;margin-left:4px}
+        td{padding:10px 14px;border-bottom:1px solid #1e2d4a}
+        tr:hover td{background:rgba(59,130,246,.05)}
+        .model-name{font-weight:700;font-size:14px}
+        .company-badge{padding:2px 10px;border-radius:12px;font-size:11px;font-weight:600}
+        .badge-oss{background:rgba(34,197,94,.15);color:#86efac;padding:2px 8px;border-radius:10px;font-size:11px}
+        .num{text-align:right;font-family:'Fira Code',monospace}
+
+        /* Charts grid */
+        .charts-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+        .chart-card{background:#131a2e;border:1px solid #1e2d4a;border-radius:12px;padding:20px}
+        .chart-card h3{font-size:12px;color:#64748b;text-transform:uppercase;letter-spacing:1px;margin-bottom:12px}
+        .chart-container{position:relative;height:280px}
+
+        /* Comparator */
+        .comparator{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px}
+        .comparator select{background:#0f172a;color:#e2e8f0;border:1px solid #334155;border-radius:8px;padding:8px 12px;font-size:13px;outline:none;width:100%}
+        .compare-row{display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:13px}
+        .compare-label{width:100px;color:#64748b;flex-shrink:0;text-align:right}
+        .compare-bar{flex:1;height:20px;border-radius:4px;position:relative;overflow:hidden}
+        .compare-fill{height:100%;border-radius:4px;transition:width .4s}
+        .compare-val{font-family:'Fira Code',monospace;font-size:12px;min-width:60px;flex-shrink:0}
+        .winner{color:#86efac;font-weight:700}
+
+        @media(max-width:768px){.charts-grid{grid-template-columns:1fr}.comparator{grid-template-columns:1fr}}
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>📊 Dashboard Comparativo de LLMs</h1>
+    <p class="subtitle">Compara capacidades, precios y benchmarks de los principales modelos — Datos de marzo 2026</p>
+
+    <!-- Filters -->
+    <div class="card">
+        <div class="filters">
+            <input type="text" id="searchInput" placeholder="🔍 Buscar modelo..." oninput="renderTable()">
+            <div id="companyFilters"></div>
+            <label class="chip" style="--c:#86efac;--cbg:rgba(34,197,94,.15)" onclick="toggleOSS(this)">
+                <span>Open Source</span>
+            </label>
+        </div>
+        <div class="table-wrap"><table><thead><tr id="tableHead"></tr></thead><tbody id="tableBody"></tbody></table></div>
+    </div>
+
+    <!-- Charts -->
+    <div class="charts-grid">
+        <div class="chart-card">
+            <h3>Ventana de Contexto (tokens)</h3>
+            <div class="chart-container"><canvas id="contextChart"></canvas></div>
+        </div>
+        <div class="chart-card">
+            <h3>Benchmarks (MMLU / HumanEval / MATH)</h3>
+            <div class="chart-container"><canvas id="radarChart"></canvas></div>
+        </div>
+    </div>
+
+    <!-- Comparator -->
+    <div class="card" style="margin-top:16px">
+        <h2>Comparador 1 vs 1</h2>
+        <div class="comparator">
+            <select id="cmpA" onchange="renderCompare()"></select>
+            <select id="cmpB" onchange="renderCompare()"></select>
+        </div>
+        <div id="compareResult" style="margin-top:16px"></div>
+    </div>
+</div>
+
+<script>
+    var COMPANIES = {
+        "OpenAI": { color: "#22c55e", bg: "rgba(34,197,94,.15)" },
+        "Anthropic": { color: "#f97316", bg: "rgba(249,115,22,.15)" },
+        "Google": { color: "#3b82f6", bg: "rgba(59,130,246,.15)" },
+        "DeepSeek": { color: "#ef4444", bg: "rgba(239,68,68,.15)" },
+        "Meta": { color: "#1e40af", bg: "rgba(30,64,175,.15)" },
+        "Alibaba": { color: "#eab308", bg: "rgba(234,179,8,.15)" },
+        "Zhipu AI": { color: "#06b6d4", bg: "rgba(6,182,212,.15)" },
+        "Mistral": { color: "#a855f7", bg: "rgba(168,85,247,.15)" }
+    };
+
+    // Datos actualizados a 9 de marzo de 2026
+    // Fuentes: Artificial Analysis, TechCrunch, EvoLink, Clarifai, GlobalGPT, DEV.to
+    var MODELS = [
+        { name: "GPT-5.4", company: "OpenAI", context: 1050000, priceIn: 2.50, priceOut: 15.00, oss: false, mmlu: 93.0, humaneval: 93.5, math: 97.0, strengths: ["Más reciente (5 mar 2026)", "1.05M contexto", "Computer Use nativo", "GDPval 83%", "OSWorld 75%"] },
+        { name: "GPT-5.2", company: "OpenAI", context: 400000, priceIn: 1.75, priceOut: 14.00, oss: false, mmlu: 92.3, humaneval: 93.0, math: 96.4, strengths: ["Razonamiento matemático", "AIME 100%", "Precio competitivo"] },
+        { name: "GPT-5 mini", company: "OpenAI", context: 128000, priceIn: 0.25, priceOut: 2.00, oss: false, mmlu: 85.0, humaneval: 88.0, math: 78.0, strengths: ["Muy barato", "Rápido", "Buen equilibrio"] },
+        { name: "Claude Opus 4.6", company: "Anthropic", context: 1000000, priceIn: 5.00, priceOut: 25.00, oss: false, mmlu: 91.8, humaneval: 94.2, math: 89.5, strengths: ["SWE-bench #1 (80.8%)", "1M contexto (beta)", "Agent Teams", "128K max output"] },
+        { name: "Claude Sonnet 4.6", company: "Anthropic", context: 200000, priceIn: 3.00, priceOut: 15.00, oss: false, mmlu: 89.5, humaneval: 92.0, math: 82.0, strengths: ["Código excelente", "Buena velocidad", "Equilibrio calidad/precio"] },
+        { name: "Claude Haiku 4.5", company: "Anthropic", context: 200000, priceIn: 0.80, priceOut: 4.00, oss: false, mmlu: 80.0, humaneval: 82.0, math: 65.0, strengths: ["Ultrarrápido", "Económico", "200K contexto"] },
+        { name: "Gemini 3.1 Pro", company: "Google", context: 1000000, priceIn: 2.00, priceOut: 12.00, oss: false, mmlu: 90.5, humaneval: 91.0, math: 88.0, strengths: ["ARC-AGI-2: 77.1%", "1M contexto nativo", "Multimodal (vídeo+audio)", "Deep Think"] },
+        { name: "Gemini 3 Flash", company: "Google", context: 1000000, priceIn: 0.50, priceOut: 3.00, oss: false, mmlu: 83.0, humaneval: 82.0, math: 70.0, strengths: ["Muy barato", "1M contexto", "Rápido"] },
+        { name: "DeepSeek V3.2", company: "DeepSeek", context: 1000000, priceIn: 0.14, priceOut: 0.55, oss: true, mmlu: 88.5, humaneval: 90.0, math: 90.2, strengths: ["20x más barato que GPT", "1M contexto", "Open source", "Engram memory"] },
+        { name: "DeepSeek R1", company: "DeepSeek", context: 128000, priceIn: 0.14, priceOut: 0.55, oss: true, mmlu: 87.0, humaneval: 89.0, math: 95.7, strengths: ["Razonamiento profundo", "Matemáticas top", "Open source", "10-40x más barato"] },
+        { name: "Llama 4 Maverick", company: "Meta", context: 1000000, priceIn: 0, priceOut: 0, oss: true, mmlu: 88.0, humaneval: 89.5, math: 75.0, strengths: ["Open source", "1M contexto", "MoE eficiente", "Personalizable"] },
+        { name: "Qwen 3.5 397B", company: "Alibaba", context: 256000, priceIn: 0, priceOut: 0, oss: true, mmlu: 89.0, humaneval: 91.0, math: 85.0, strengths: ["Apache 2.0", "201 idiomas", "Visión", "MoE 17B activos"] },
+        { name: "GLM-4.7", company: "Zhipu AI", context: 200000, priceIn: 0, priceOut: 0, oss: true, mmlu: 88.0, humaneval: 94.2, math: 85.7, strengths: ["HumanEval #1 open source", "Chatbot Arena #2 (1445 Elo)", "AIME 95.7%"] },
+        { name: "Mistral Large 3", company: "Mistral", context: 128000, priceIn: 2.00, priceOut: 6.00, oss: false, mmlu: 86.5, humaneval: 87.0, math: 72.0, strengths: ["675B MoE (41B activos)", "40+ idiomas", "Europa (GDPR)", "Function calling"] }
+    ];
+
+    var sortCol = "mmlu", sortAsc = false, filterOSS = false;
+    var activeCompanies = {};
+    Object.keys(COMPANIES).forEach(function(c) { activeCompanies[c] = true; });
+
+    // ═══════════════════════════════════════════════
+    // TABLE
+    // ═══════════════════════════════════════════════
+
+    var COLUMNS = [
+        { key: "name", label: "Modelo", sort: true },
+        { key: "company", label: "Empresa", sort: true },
+        { key: "context", label: "Contexto", sort: true, num: true },
+        { key: "priceIn", label: "$/1M In", sort: true, num: true },
+        { key: "priceOut", label: "$/1M Out", sort: true, num: true },
+        { key: "mmlu", label: "MMLU", sort: true, num: true },
+        { key: "humaneval", label: "HumanEval", sort: true, num: true },
+        { key: "oss", label: "OSS", sort: false }
+    ];
+
+    function renderFilters() {
+        var el = document.getElementById("companyFilters");
+        el.innerHTML = "";
+        Object.keys(COMPANIES).forEach(function(c) {
+            var info = COMPANIES[c];
+            var chip = document.createElement("div");
+            chip.className = "chip" + (activeCompanies[c] ? " active" : "");
+            chip.style.setProperty("--c", info.color);
+            chip.style.setProperty("--cbg", info.bg);
+            chip.innerHTML = '<div class="dot" style="background:' + info.color + '"></div>' + c;
+            chip.onclick = function() { activeCompanies[c] = !activeCompanies[c]; renderFilters(); renderTable(); };
+            el.appendChild(chip);
+        });
+    }
+
+    function toggleOSS(el) {
+        filterOSS = !filterOSS;
+        el.classList.toggle("active");
+        renderTable();
+    }
+
+    function getFilteredModels() {
+        var q = (document.getElementById("searchInput").value || "").toLowerCase();
+        return MODELS.filter(function(m) {
+            if (!activeCompanies[m.company]) return false;
+            if (filterOSS && !m.oss) return false;
+            if (q && m.name.toLowerCase().indexOf(q) === -1 && m.company.toLowerCase().indexOf(q) === -1) return false;
+            return true;
+        });
+    }
+
+    function renderTable() {
+        var models = getFilteredModels();
+
+        // Sort
+        models.sort(function(a, b) {
+            var va = a[sortCol], vb = b[sortCol];
+            if (typeof va === "string") { va = va.toLowerCase(); vb = vb.toLowerCase(); }
+            if (va < vb) return sortAsc ? -1 : 1;
+            if (va > vb) return sortAsc ? 1 : -1;
+            return 0;
+        });
+
+        // Head
+        var head = document.getElementById("tableHead");
+        head.innerHTML = "";
+        COLUMNS.forEach(function(col) {
+            var th = document.createElement("th");
+            var arrow = "";
+            if (col.sort) {
+                if (sortCol === col.key) arrow = '<span class="arrow">' + (sortAsc ? "▲" : "▼") + '</span>';
+                th.onclick = function() { if (sortCol === col.key) sortAsc = !sortAsc; else { sortCol = col.key; sortAsc = false; } renderTable(); };
+            }
+            th.innerHTML = col.label + arrow;
+            if (col.num) th.style.textAlign = "right";
+            head.appendChild(th);
+        });
+
+        // Body
+        var tbody = document.getElementById("tableBody");
+        tbody.innerHTML = "";
+        models.forEach(function(m) {
+            var info = COMPANIES[m.company] || { color: "#64748b", bg: "rgba(100,116,139,.15)" };
+            var tr = document.createElement("tr");
+            tr.innerHTML =
+                '<td><span class="model-name">' + m.name + '</span></td>' +
+                '<td><span class="company-badge" style="background:' + info.bg + ';color:' + info.color + '">' + m.company + '</span></td>' +
+                '<td class="num">' + formatNum(m.context) + '</td>' +
+                '<td class="num">' + (m.priceIn === 0 ? '<span style="color:#86efac">Gratis</span>' : '$' + m.priceIn.toFixed(2)) + '</td>' +
+                '<td class="num">' + (m.priceOut === 0 ? '<span style="color:#86efac">Gratis</span>' : '$' + m.priceOut.toFixed(2)) + '</td>' +
+                '<td class="num" style="font-weight:700">' + m.mmlu + '</td>' +
+                '<td class="num">' + m.humaneval + '</td>' +
+                '<td>' + (m.oss ? '<span class="badge-oss">OSS</span>' : '—') + '</td>';
+            tbody.appendChild(tr);
+        });
+    }
+
+    function formatNum(n) {
+        if (n >= 1000000) return (n / 1000000).toFixed(1) + "M";
+        if (n >= 1000) return (n / 1000) + "K";
+        return n.toString();
+    }
+
+    // ═══════════════════════════════════════════════
+    // CHARTS
+    // ═══════════════════════════════════════════════
+
+    var contextChartInstance = null, radarChartInstance = null;
+
+    function renderCharts() {
+        if (typeof Chart === "undefined") return;
+
+        // Context chart
+        var ctx1 = document.getElementById("contextChart").getContext("2d");
+        if (contextChartInstance) contextChartInstance.destroy();
+
+        var sorted = MODELS.slice().sort(function(a, b) { return b.context - a.context; });
+        contextChartInstance = new Chart(ctx1, {
+            type: "bar",
+            data: {
+                labels: sorted.map(function(m) { return m.name; }),
+                datasets: [{
+                    data: sorted.map(function(m) { return m.context; }),
+                    backgroundColor: sorted.map(function(m) { return COMPANIES[m.company].color + "aa"; }),
+                    borderColor: sorted.map(function(m) { return COMPANIES[m.company].color; }),
+                    borderWidth: 1, borderRadius: 4
+                }]
+            },
+            options: {
+                indexAxis: "y", responsive: true, maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: { type: "logarithmic", ticks: { color: "#64748b", callback: function(v) { return formatNum(v); } }, grid: { color: "#1e2d4a" } },
+                    y: { ticks: { color: "#e2e8f0", font: { size: 11 } }, grid: { display: false } }
+                }
+            }
+        });
+
+        // Radar chart
+        var ctx2 = document.getElementById("radarChart").getContext("2d");
+        if (radarChartInstance) radarChartInstance.destroy();
+
+        var datasets = MODELS.map(function(m) {
+            var c = COMPANIES[m.company].color;
+            return {
+                label: m.name,
+                data: [m.mmlu, m.humaneval, m.math],
+                backgroundColor: c + "15",
+                borderColor: c,
+                borderWidth: 2,
+                pointRadius: 4,
+                pointBackgroundColor: c
+            };
+        });
+
+        radarChartInstance = new Chart(ctx2, {
+            type: "radar",
+            data: { labels: ["MMLU", "HumanEval", "MATH"], datasets: datasets },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                plugins: { legend: { labels: { color: "#94a3b8", font: { size: 10 } }, position: "bottom" } },
+                scales: { r: { beginAtZero: false, min: 30, max: 100, ticks: { color: "#64748b", backdropColor: "transparent", stepSize: 10 }, grid: { color: "#1e2d4a" }, angleLines: { color: "#1e2d4a" }, pointLabels: { color: "#e2e8f0", font: { size: 12, weight: "600" } } } }
+            }
+        });
+    }
+
+    // ═══════════════════════════════════════════════
+    // COMPARATOR
+    // ═══════════════════════════════════════════════
+
+    function initCompare() {
+        var selA = document.getElementById("cmpA");
+        var selB = document.getElementById("cmpB");
+        selA.innerHTML = ""; selB.innerHTML = "";
+        MODELS.forEach(function(m, i) {
+            selA.innerHTML += '<option value="' + i + '">' + m.name + '</option>';
+            selB.innerHTML += '<option value="' + i + '">' + m.name + '</option>';
+        });
+        selB.value = "3"; // Default: Claude Opus 4.6 vs GPT-5.4
+        renderCompare();
+    }
+
+    function renderCompare() {
+        var a = MODELS[parseInt(document.getElementById("cmpA").value)];
+        var b = MODELS[parseInt(document.getElementById("cmpB").value)];
+        var el = document.getElementById("compareResult");
+
+        var metrics = [
+            { label: "Contexto", ka: a.context, kb: b.context, fmt: formatNum, higher: true },
+            { label: "MMLU", ka: a.mmlu, kb: b.mmlu, fmt: function(v) { return v.toFixed(1); }, higher: true },
+            { label: "HumanEval", ka: a.humaneval, kb: b.humaneval, fmt: function(v) { return v.toFixed(1); }, higher: true },
+            { label: "MATH", ka: a.math, kb: b.math, fmt: function(v) { return v.toFixed(1); }, higher: true },
+            { label: "Precio In", ka: a.priceIn, kb: b.priceIn, fmt: function(v) { return v === 0 ? "Gratis" : "$" + v.toFixed(2); }, higher: false },
+            { label: "Precio Out", ka: a.priceOut, kb: b.priceOut, fmt: function(v) { return v === 0 ? "Gratis" : "$" + v.toFixed(2); }, higher: false },
+        ];
+
+        var cA = COMPANIES[a.company].color;
+        var cB = COMPANIES[b.company].color;
+
+        var html = '<div style="display:flex;justify-content:space-between;margin-bottom:12px;font-weight:700">' +
+            '<span style="color:' + cA + '">' + a.name + '</span>' +
+            '<span style="color:' + cB + '">' + b.name + '</span></div>';
+
+        metrics.forEach(function(m) {
+            var maxVal = Math.max(m.ka, m.kb) || 1;
+            var pctA = Math.round(m.ka / maxVal * 100);
+            var pctB = Math.round(m.kb / maxVal * 100);
+            var winA, winB;
+            if (m.higher) { winA = m.ka > m.kb; winB = m.kb > m.ka; }
+            else { winA = m.ka < m.kb; winB = m.kb < m.ka; }
+            // Special: 0 = free is always winner for price
+            if (!m.higher) { if (m.ka === 0) winA = true; if (m.kb === 0) winB = true; }
+
+            html += '<div class="compare-row">' +
+                '<span class="compare-val' + (winA ? " winner" : "") + '" style="text-align:right">' + m.fmt(m.ka) + '</span>' +
+                '<div class="compare-bar"><div class="compare-fill" style="width:' + pctA + '%;background:' + cA + ';float:right;border-radius:4px 0 0 4px"></div></div>' +
+                '<span class="compare-label">' + m.label + '</span>' +
+                '<div class="compare-bar"><div class="compare-fill" style="width:' + pctB + '%;background:' + cB + ';border-radius:0 4px 4px 0"></div></div>' +
+                '<span class="compare-val' + (winB ? " winner" : "") + '">' + m.fmt(m.kb) + '</span></div>';
+        });
+
+        el.innerHTML = html;
+    }
+
+    // Init
+    renderFilters();
+    renderTable();
+    renderCharts();
+    initCompare();
+</script>
+</body>
+</html>

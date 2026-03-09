@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>E3.3 — Conversor de Colores</title>
+    <style>
+        *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+        body{font-family:'Segoe UI',system-ui,sans-serif;background:#0a0e1a;color:#e2e8f0;min-height:100vh;padding:20px}
+        .container{max-width:700px;margin:0 auto}
+        h1{text-align:center;font-size:22px;margin-bottom:4px;background:linear-gradient(135deg,#60a5fa,#a78bfa);-webkit-background-clip:text;-webkit-text-fill-color:transparent;font-weight:800}
+        .subtitle{text-align:center;color:#64748b;font-size:13px;margin-bottom:20px}
+        .card{background:#131a2e;border:1px solid #1e2d4a;border-radius:12px;padding:20px;margin-bottom:12px}
+        .card h2{font-size:12px;color:#64748b;text-transform:uppercase;letter-spacing:1px;margin-bottom:12px}
+
+        /* Preview */
+        .preview-area{display:flex;gap:16px;align-items:center;flex-wrap:wrap;justify-content:center}
+        .color-box{width:180px;height:180px;border-radius:16px;display:flex;flex-direction:column;justify-content:center;align-items:center;font-size:14px;font-weight:700;transition:background .15s;border:2px solid rgba(255,255,255,.1);position:relative;overflow:hidden}
+        .color-box .text-white{color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.5)}
+        .color-box .text-black{color:#000;text-shadow:0 1px 2px rgba(255,255,255,.3)}
+        .contrast-badges{display:flex;flex-direction:column;gap:8px;font-size:12px}
+        .contrast-badge{padding:4px 12px;border-radius:8px;font-weight:600;display:flex;align-items:center;gap:6px}
+        .contrast-pass{background:rgba(34,197,94,.15);color:#86efac}
+        .contrast-fail{background:rgba(239,68,68,.15);color:#fca5a5}
+
+        /* Sliders */
+        .slider-row{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+        .slider-label{width:24px;font-size:13px;font-weight:700;color:#94a3b8;text-align:right;flex-shrink:0}
+        .slider-row input[type=range]{flex:1;-webkit-appearance:none;height:8px;border-radius:4px;outline:none;background:#1e293b}
+        .slider-row input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:20px;height:20px;border-radius:50%;cursor:pointer;border:2px solid #fff;box-shadow:0 0 6px rgba(0,0,0,.3)}
+        .slider-row input[type=number]{width:60px;background:#0f172a;color:#e2e8f0;border:1px solid #334155;border-radius:6px;padding:4px 8px;text-align:center;font-size:13px;font-family:'Fira Code',monospace;outline:none}
+        .slider-row input[type=number]:focus{border-color:#3b82f6}
+
+        /* HEX input */
+        .hex-row{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+        .hex-row input{flex:1;background:#0f172a;color:#e2e8f0;border:1px solid #334155;border-radius:8px;padding:10px 14px;font-size:18px;font-family:'Fira Code',monospace;text-align:center;outline:none;letter-spacing:2px}
+        .hex-row input:focus{border-color:#3b82f6}
+
+        /* Buttons */
+        .btn-row{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin-bottom:12px}
+        .btn{background:#1e293b;color:#94a3b8;border:1px solid #334155;border-radius:8px;padding:6px 14px;font-size:12px;cursor:pointer;transition:all .15s;font-weight:600}
+        .btn:hover{border-color:#3b82f6;color:#e2e8f0}
+
+        /* Palette */
+        .palette{display:flex;gap:6px;flex-wrap:wrap}
+        .swatch{width:32px;height:32px;border-radius:8px;cursor:pointer;border:2px solid transparent;transition:all .15s}
+        .swatch:hover{transform:scale(1.15);border-color:#fff}
+
+        /* Luminosity bar */
+        .lum-bar{display:flex;gap:2px;border-radius:8px;overflow:hidden;height:32px}
+        .lum-step{flex:1;cursor:pointer;transition:transform .1s}
+        .lum-step:hover{transform:scaleY(1.2)}
+
+        .toast{position:fixed;bottom:20px;right:20px;background:#22c55e;color:white;padding:10px 20px;border-radius:8px;font-size:14px;opacity:0;transition:opacity .3s;z-index:100;pointer-events:none}
+        .toast.show{opacity:1}
+        @media(max-width:500px){.color-box{width:140px;height:140px}}
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>🎨 Conversor de Colores</h1>
+    <p class="subtitle">HEX ↔ RGB ↔ HSL — Conversión bidireccional en tiempo real</p>
+
+    <!-- Preview + Contrast -->
+    <div class="card">
+        <div class="preview-area">
+            <div class="color-box" id="colorBox">
+                <span class="text-white">White text</span>
+                <span class="text-black">Black text</span>
+            </div>
+            <div class="contrast-badges">
+                <div class="contrast-badge" id="contrastWhite">⬜ vs Blanco: —</div>
+                <div class="contrast-badge" id="contrastBlack">⬛ vs Negro: —</div>
+                <div id="complementary" style="display:flex;align-items:center;gap:8px;margin-top:8px">
+                    <span style="font-size:12px;color:#64748b">Complementario:</span>
+                    <div class="swatch" id="compSwatch" style="width:28px;height:28px"></div>
+                    <span id="compHex" style="font-size:12px;font-family:'Fira Code',monospace;color:#94a3b8"></span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- HEX -->
+    <div class="card">
+        <h2>HEX</h2>
+        <div class="hex-row">
+            <input type="text" id="hexInput" value="#3B82F6" maxlength="7" oninput="fromHex()">
+        </div>
+        <div class="btn-row">
+            <button class="btn" onclick="randomColor()">🎲 Random</button>
+            <button class="btn" onclick="copyHex()">📋 Copiar HEX</button>
+        </div>
+    </div>
+
+    <!-- RGB -->
+    <div class="card">
+        <h2>RGB</h2>
+        <div class="slider-row"><span class="slider-label" style="color:#f87171">R</span><input type="range" id="rSlider" min="0" max="255" value="59" oninput="fromRGB()"><input type="number" id="rNum" min="0" max="255" value="59" oninput="fromRGBNum()"></div>
+        <div class="slider-row"><span class="slider-label" style="color:#4ade80">G</span><input type="range" id="gSlider" min="0" max="255" value="130" oninput="fromRGB()"><input type="number" id="gNum" min="0" max="255" value="130" oninput="fromRGBNum()"></div>
+        <div class="slider-row"><span class="slider-label" style="color:#60a5fa">B</span><input type="range" id="bSlider" min="0" max="255" value="246" oninput="fromRGB()"><input type="number" id="bNum" min="0" max="255" value="246" oninput="fromRGBNum()"></div>
+    </div>
+
+    <!-- HSL -->
+    <div class="card">
+        <h2>HSL</h2>
+        <div class="slider-row"><span class="slider-label">H</span><input type="range" id="hSlider" min="0" max="360" value="217" oninput="fromHSL()"><input type="number" id="hNum" min="0" max="360" value="217" oninput="fromHSLNum()"></div>
+        <div class="slider-row"><span class="slider-label">S</span><input type="range" id="sSlider" min="0" max="100" value="91" oninput="fromHSL()"><input type="number" id="sNum" min="0" max="100" value="91" oninput="fromHSLNum()"></div>
+        <div class="slider-row"><span class="slider-label">L</span><input type="range" id="lSlider" min="0" max="100" value="60" oninput="fromHSL()"><input type="number" id="lNum" min="0" max="100" value="60" oninput="fromHSLNum()"></div>
+    </div>
+
+    <!-- Luminosity bar -->
+    <div class="card">
+        <h2>Variantes de Luminosidad</h2>
+        <div class="lum-bar" id="lumBar"></div>
+    </div>
+
+    <!-- Presets + History -->
+    <div class="card">
+        <h2>Colores Predefinidos</h2>
+        <div class="palette" id="presets"></div>
+    </div>
+    <div class="card">
+        <h2>Historial (últimos 10)</h2>
+        <div class="palette" id="history"></div>
+    </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+    var currentR = 59, currentG = 130, currentB = 246;
+    var colorHistory = [];
+    var PRESETS = ["#EF4444","#F97316","#EAB308","#22C55E","#06B6D4","#3B82F6","#8B5CF6","#EC4899","#FFFFFF","#94A3B8","#1E293B","#D4A017"];
+
+    // ═══════════════════════════════════════════════
+    // CONVERSION FUNCTIONS
+    // ═══════════════════════════════════════════════
+
+    function rgbToHex(r, g, b) {
+        return "#" + [r, g, b].map(function(x) { return Math.max(0, Math.min(255, Math.round(x))).toString(16).padStart(2, "0"); }).join("").toUpperCase();
+    }
+
+    function hexToRgb(hex) {
+        hex = hex.replace("#", "");
+        if (hex.length === 3) hex = hex[0]+hex[0]+hex[1]+hex[1]+hex[2]+hex[2];
+        if (hex.length !== 6) return null;
+        var n = parseInt(hex, 16);
+        if (isNaN(n)) return null;
+        return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
+    }
+
+    function rgbToHsl(r, g, b) {
+        r /= 255; g /= 255; b /= 255;
+        var max = Math.max(r, g, b), min = Math.min(r, g, b);
+        var h = 0, s = 0, l = (max + min) / 2;
+        if (max !== min) {
+            var d = max - min;
+            s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+            if (max === r) h = ((g - b) / d + (g < b ? 6 : 0)) / 6;
+            else if (max === g) h = ((b - r) / d + 2) / 6;
+            else h = ((r - g) / d + 4) / 6;
+        }
+        return { h: Math.round(h * 360), s: Math.round(s * 100), l: Math.round(l * 100) };
+    }
+
+    function hslToRgb(h, s, l) {
+        h /= 360; s /= 100; l /= 100;
+        var r, g, b2;
+        if (s === 0) { r = g = b2 = l; }
+        else {
+            var q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+            var p = 2 * l - q;
+            r = hue2rgb(p, q, h + 1/3);
+            g = hue2rgb(p, q, h);
+            b2 = hue2rgb(p, q, h - 1/3);
+        }
+        return { r: Math.round(r * 255), g: Math.round(g * 255), b: Math.round(b2 * 255) };
+    }
+
+    function hue2rgb(p, q, t) {
+        if (t < 0) t += 1; if (t > 1) t -= 1;
+        if (t < 1/6) return p + (q - p) * 6 * t;
+        if (t < 1/2) return q;
+        if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
+        return p;
+    }
+
+    function luminance(r, g, b) {
+        var a = [r, g, b].map(function(v) { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); });
+        return 0.2126 * a[0] + 0.7152 * a[1] + 0.0722 * a[2];
+    }
+
+    function contrastRatio(l1, l2) {
+        var lighter = Math.max(l1, l2), darker = Math.min(l1, l2);
+        return (lighter + 0.05) / (darker + 0.05);
+    }
+
+    // ═══════════════════════════════════════════════
+    // UPDATE FROM DIFFERENT SOURCES
+    // ═══════════════════════════════════════════════
+
+    var updating = false;
+
+    function fromHex() {
+        if (updating) return;
+        var rgb = hexToRgb(document.getElementById("hexInput").value);
+        if (!rgb) return;
+        currentR = rgb.r; currentG = rgb.g; currentB = rgb.b;
+        updating = true; syncAll("hex"); updating = false;
+    }
+
+    function fromRGB() {
+        if (updating) return;
+        currentR = parseInt(document.getElementById("rSlider").value);
+        currentG = parseInt(document.getElementById("gSlider").value);
+        currentB = parseInt(document.getElementById("bSlider").value);
+        updating = true;
+        document.getElementById("rNum").value = currentR;
+        document.getElementById("gNum").value = currentG;
+        document.getElementById("bNum").value = currentB;
+        syncAll("rgb"); updating = false;
+    }
+
+    function fromRGBNum() {
+        if (updating) return;
+        currentR = clamp(parseInt(document.getElementById("rNum").value) || 0, 0, 255);
+        currentG = clamp(parseInt(document.getElementById("gNum").value) || 0, 0, 255);
+        currentB = clamp(parseInt(document.getElementById("bNum").value) || 0, 0, 255);
+        updating = true;
+        document.getElementById("rSlider").value = currentR;
+        document.getElementById("gSlider").value = currentG;
+        document.getElementById("bSlider").value = currentB;
+        syncAll("rgb"); updating = false;
+    }
+
+    function fromHSL() {
+        if (updating) return;
+        var h = parseInt(document.getElementById("hSlider").value);
+        var s = parseInt(document.getElementById("sSlider").value);
+        var l = parseInt(document.getElementById("lSlider").value);
+        var rgb = hslToRgb(h, s, l);
+        currentR = rgb.r; currentG = rgb.g; currentB = rgb.b;
+        updating = true;
+        document.getElementById("hNum").value = h;
+        document.getElementById("sNum").value = s;
+        document.getElementById("lNum").value = l;
+        syncAll("hsl"); updating = false;
+    }
+
+    function fromHSLNum() {
+        if (updating) return;
+        var h = clamp(parseInt(document.getElementById("hNum").value) || 0, 0, 360);
+        var s = clamp(parseInt(document.getElementById("sNum").value) || 0, 0, 100);
+        var l = clamp(parseInt(document.getElementById("lNum").value) || 0, 0, 100);
+        var rgb = hslToRgb(h, s, l);
+        currentR = rgb.r; currentG = rgb.g; currentB = rgb.b;
+        updating = true;
+        document.getElementById("hSlider").value = h;
+        document.getElementById("sSlider").value = s;
+        document.getElementById("lSlider").value = l;
+        syncAll("hsl"); updating = false;
+    }
+
+    function setColor(hex) {
+        var rgb = hexToRgb(hex);
+        if (!rgb) return;
+        currentR = rgb.r; currentG = rgb.g; currentB = rgb.b;
+        updating = true; syncAll(""); updating = false;
+        addToHistory(hex);
+    }
+
+    function syncAll(source) {
+        var hex = rgbToHex(currentR, currentG, currentB);
+        var hsl = rgbToHsl(currentR, currentG, currentB);
+
+        if (source !== "hex") document.getElementById("hexInput").value = hex;
+        if (source !== "rgb") {
+            document.getElementById("rSlider").value = currentR; document.getElementById("rNum").value = currentR;
+            document.getElementById("gSlider").value = currentG; document.getElementById("gNum").value = currentG;
+            document.getElementById("bSlider").value = currentB; document.getElementById("bNum").value = currentB;
+        }
+        if (source !== "hsl") {
+            document.getElementById("hSlider").value = hsl.h; document.getElementById("hNum").value = hsl.h;
+            document.getElementById("sSlider").value = hsl.s; document.getElementById("sNum").value = hsl.s;
+            document.getElementById("lSlider").value = hsl.l; document.getElementById("lNum").value = hsl.l;
+        }
+
+        // Preview
+        document.getElementById("colorBox").style.background = hex;
+
+        // Slider thumb colors
+        document.getElementById("rSlider").style.setProperty("accent-color", "rgb(" + currentR + ",60,60)");
+        document.getElementById("gSlider").style.setProperty("accent-color", "rgb(60," + currentG + ",60)");
+        document.getElementById("bSlider").style.setProperty("accent-color", "rgb(60,60," + currentB + ")");
+        document.getElementById("hSlider").style.setProperty("accent-color", "hsl(" + hsl.h + ",100%,50%)");
+
+        // Contrast
+        var lum = luminance(currentR, currentG, currentB);
+        var crWhite = contrastRatio(lum, 1.0);
+        var crBlack = contrastRatio(lum, 0.0);
+        var wEl = document.getElementById("contrastWhite");
+        var bEl = document.getElementById("contrastBlack");
+        wEl.textContent = "⬜ vs Blanco: " + crWhite.toFixed(1) + ":1 " + (crWhite >= 4.5 ? "AA ✅" : (crWhite >= 3 ? "AA-lg ✅" : "Fail ❌"));
+        wEl.className = "contrast-badge " + (crWhite >= 3 ? "contrast-pass" : "contrast-fail");
+        bEl.textContent = "⬛ vs Negro: " + crBlack.toFixed(1) + ":1 " + (crBlack >= 4.5 ? "AA ✅" : (crBlack >= 3 ? "AA-lg ✅" : "Fail ❌"));
+        bEl.className = "contrast-badge " + (crBlack >= 3 ? "contrast-pass" : "contrast-fail");
+
+        // Complementary
+        var compH = (hsl.h + 180) % 360;
+        var compRgb = hslToRgb(compH, hsl.s, hsl.l);
+        var compHex = rgbToHex(compRgb.r, compRgb.g, compRgb.b);
+        document.getElementById("compSwatch").style.background = compHex;
+        document.getElementById("compSwatch").onclick = function() { setColor(compHex); };
+        document.getElementById("compHex").textContent = compHex;
+
+        // Luminosity bar
+        renderLumBar(hsl.h, hsl.s);
+    }
+
+    function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
+
+    // ═══════════════════════════════════════════════
+    // LUMINOSITY BAR
+    // ═══════════════════════════════════════════════
+
+    function renderLumBar(h, s) {
+        var bar = document.getElementById("lumBar");
+        bar.innerHTML = "";
+        for (var l = 5; l <= 95; l += 10) {
+            var rgb = hslToRgb(h, s, l);
+            var hex = rgbToHex(rgb.r, rgb.g, rgb.b);
+            var step = document.createElement("div");
+            step.className = "lum-step";
+            step.style.background = hex;
+            step.title = "L:" + l + "% — " + hex;
+            step.setAttribute("data-hex", hex);
+            step.onclick = function() { setColor(this.getAttribute("data-hex")); };
+            bar.appendChild(step);
+        }
+    }
+
+    // ═══════════════════════════════════════════════
+    // PALETTE & HISTORY
+    // ═══════════════════════════════════════════════
+
+    function renderPresets() {
+        var el = document.getElementById("presets");
+        el.innerHTML = "";
+        for (var i = 0; i < PRESETS.length; i++) {
+            var sw = document.createElement("div");
+            sw.className = "swatch";
+            sw.style.background = PRESETS[i];
+            sw.title = PRESETS[i];
+            sw.setAttribute("data-hex", PRESETS[i]);
+            sw.onclick = function() { setColor(this.getAttribute("data-hex")); };
+            el.appendChild(sw);
+        }
+    }
+
+    function addToHistory(hex) {
+        hex = hex.toUpperCase();
+        colorHistory = colorHistory.filter(function(c) { return c !== hex; });
+        colorHistory.unshift(hex);
+        if (colorHistory.length > 10) colorHistory.pop();
+        renderHistory();
+    }
+
+    function renderHistory() {
+        var el = document.getElementById("history");
+        el.innerHTML = "";
+        if (colorHistory.length === 0) { el.innerHTML = '<span style="color:#475569;font-size:12px">Cambia colores para llenar el historial</span>'; return; }
+        for (var i = 0; i < colorHistory.length; i++) {
+            var sw = document.createElement("div");
+            sw.className = "swatch";
+            sw.style.background = colorHistory[i];
+            sw.title = colorHistory[i];
+            sw.setAttribute("data-hex", colorHistory[i]);
+            sw.onclick = function() { setColor(this.getAttribute("data-hex")); };
+            el.appendChild(sw);
+        }
+    }
+
+    // ═══════════════════════════════════════════════
+    // ACTIONS
+    // ═══════════════════════════════════════════════
+
+    function randomColor() {
+        var hex = "#" + Math.floor(Math.random() * 16777215).toString(16).padStart(6, "0").toUpperCase();
+        setColor(hex);
+    }
+
+    function copyHex() {
+        var hex = document.getElementById("hexInput").value;
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(hex).then(function() { showToast("📋 " + hex + " copiado"); });
+        } else {
+            var ta = document.createElement("textarea"); ta.value = hex;
+            document.body.appendChild(ta); ta.select(); document.execCommand("copy");
+            document.body.removeChild(ta); showToast("📋 " + hex + " copiado");
+        }
+        addToHistory(hex);
+    }
+
+    function showToast(msg) {
+        var t = document.getElementById("toast"); t.textContent = msg;
+        t.classList.add("show"); setTimeout(function() { t.classList.remove("show"); }, 1500);
+    }
+
+    // Init
+    renderPresets();
+    renderHistory();
+    syncAll("");
+</script>
+</body>
+</html>

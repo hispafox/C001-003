@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>E3.4 — Visualizador de Grafos</title>
+    <style>
+        *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+        body{font-family:'Segoe UI',system-ui,sans-serif;background:#0a0e1a;color:#e2e8f0;min-height:100vh;display:flex;flex-direction:column}
+        .controls{background:#131a2e;padding:12px 16px;border-bottom:1px solid #1e2d4a;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+        .controls h1{font-size:16px;margin-right:8px;background:linear-gradient(135deg,#60a5fa,#a78bfa);-webkit-background-clip:text;-webkit-text-fill-color:transparent;font-weight:800;white-space:nowrap}
+        .ctrl-input{background:#0f172a;color:#e2e8f0;border:1px solid #334155;border-radius:6px;padding:6px 10px;font-size:13px;outline:none;width:100px}
+        .ctrl-input:focus{border-color:#3b82f6}
+        .ctrl-select{background:#0f172a;color:#e2e8f0;border:1px solid #334155;border-radius:6px;padding:6px 8px;font-size:13px;outline:none}
+        .btn{background:#1e293b;color:#94a3b8;border:1px solid #334155;border-radius:6px;padding:6px 12px;font-size:12px;cursor:pointer;transition:all .15s;font-weight:600;white-space:nowrap}
+        .btn:hover{border-color:#3b82f6;color:#e2e8f0}
+        .btn-go{background:linear-gradient(135deg,#3b82f6,#8b5cf6);border:none;color:white}
+        .btn-go:hover{box-shadow:0 0 12px rgba(59,130,246,.3)}
+        .btn-danger{border-color:rgba(239,68,68,.3);color:#fca5a5}
+        .btn-danger:hover{border-color:#ef4444;background:rgba(239,68,68,.1)}
+
+        .main{flex:1;display:flex;min-height:0}
+        canvas{flex:1;display:block;cursor:grab;min-height:400px}
+        canvas:active{cursor:grabbing}
+
+        .sidebar{width:260px;background:#131a2e;border-left:1px solid #1e2d4a;padding:16px;overflow-y:auto;font-size:13px;flex-shrink:0}
+        .sidebar h3{font-size:11px;color:#475569;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;margin-top:16px}
+        .sidebar h3:first-child{margin-top:0}
+        .result-box{background:#0f172a;border-radius:8px;padding:12px;margin-bottom:8px;font-size:12px;line-height:1.6}
+        .result-box.cycle{border-left:3px solid #ef4444}
+        .result-box.clear{border-left:3px solid #22c55e}
+        .node-list,.edge-list{font-size:12px;color:#94a3b8}
+        .node-list span,.edge-list span{display:inline-block;background:#1e293b;padding:2px 8px;border-radius:4px;margin:2px}
+
+        .legend{display:flex;gap:12px;padding:8px 16px;background:#0f172a;border-top:1px solid #1e2d4a;font-size:11px;color:#94a3b8;flex-wrap:wrap}
+        .legend-item{display:flex;align-items:center;gap:4px}
+        .legend-dot{width:12px;height:12px;border-radius:50%}
+
+        @media(max-width:700px){.main{flex-direction:column}.sidebar{width:100%;max-height:200px;border-left:none;border-top:1px solid #1e2d4a}}
+    </style>
+</head>
+<body>
+
+<div class="controls">
+    <h1>🔗 Graph Visualizer</h1>
+    <input class="ctrl-input" id="nodeName" placeholder="Nombre nodo" onkeydown="if(event.key==='Enter')addNode()">
+    <button class="btn" onclick="addNode()">+ Nodo</button>
+    <select class="ctrl-select" id="fromNode"></select>
+    <span style="color:#475569">→</span>
+    <select class="ctrl-select" id="toNode"></select>
+    <button class="btn" onclick="addEdge()">+ Arista</button>
+    <button class="btn btn-go" onclick="detectCycles()">🔍 Detectar Ciclos</button>
+    <button class="btn" onclick="topoSort()">📊 Topo Sort</button>
+    <button class="btn" onclick="loadExample()">📋 Ejemplo</button>
+    <button class="btn btn-danger" onclick="clearGraph()">🗑 Limpiar</button>
+</div>
+
+<div class="main">
+    <canvas id="canvas"></canvas>
+    <div class="sidebar">
+        <h3>Resultado</h3>
+        <div class="result-box clear" id="resultBox">Añade nodos y aristas para empezar</div>
+        <h3>Nodos (<span id="nodeCount">0</span>)</h3>
+        <div class="node-list" id="nodeList">—</div>
+        <h3>Aristas (<span id="edgeCount">0</span>)</h3>
+        <div class="edge-list" id="edgeList">—</div>
+    </div>
+</div>
+
+<div class="legend">
+    <div class="legend-item"><div class="legend-dot" style="background:#3b82f6"></div>Normal</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#94a3b8"></div>Visitado</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#22c55e"></div>Completado</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#ef4444"></div>Ciclo</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#eab308"></div>En proceso (GRAY)</div>
+</div>
+
+<script>
+    var canvas = document.getElementById("canvas");
+    var ctx = canvas.getContext("2d");
+
+    var nodes = []; // {id, x, y, color, label}
+    var edges = []; // {from, to}
+    var dragging = null, dragOff = {x:0,y:0};
+    var NODE_R = 24;
+
+    var COLORS = { normal: "#3b82f6", visited: "#94a3b8", done: "#22c55e", cycle: "#ef4444", gray: "#eab308" };
+
+    function resizeCanvas() {
+        var rect = canvas.parentElement.getBoundingClientRect();
+        canvas.width = canvas.offsetWidth;
+        canvas.height = canvas.offsetHeight;
+        draw();
+    }
+    window.addEventListener("resize", resizeCanvas);
+
+    function addNode() {
+        var name = document.getElementById("nodeName").value.trim().toUpperCase();
+        if (!name || name.length > 5) return;
+        if (nodes.find(function(n) { return n.id === name; })) return;
+
+        var angle = nodes.length * 2.4;
+        var cx = canvas.width / 2 + Math.cos(angle) * 120;
+        var cy = canvas.height / 2 + Math.sin(angle) * 120;
+
+        nodes.push({ id: name, x: cx, y: cy, color: COLORS.normal, label: "" });
+        document.getElementById("nodeName").value = "";
+        updateSelects();
+        updateInfo();
+        draw();
+    }
+
+    function addEdge() {
+        var from = document.getElementById("fromNode").value;
+        var to = document.getElementById("toNode").value;
+        if (!from || !to) return;
+        if (edges.find(function(e) { return e.from === from && e.to === to; })) return;
+        edges.push({ from: from, to: to });
+        updateInfo();
+        draw();
+    }
+
+    function loadExample() {
+        clearGraph();
+        var ex = [["A","B"],["B","C"],["C","D"],["D","B"],["A","E"],["E","F"]];
+        var names = ["A","B","C","D","E","F"];
+        var positions = [[150,100],[300,80],[450,150],[400,300],[150,280],[250,380]];
+        for (var i = 0; i < names.length; i++) {
+            nodes.push({ id: names[i], x: positions[i][0], y: positions[i][1], color: COLORS.normal, label: "" });
+        }
+        for (var i = 0; i < ex.length; i++) edges.push({ from: ex[i][0], to: ex[i][1] });
+        updateSelects();
+        updateInfo();
+        draw();
+    }
+
+    function clearGraph() {
+        nodes = []; edges = [];
+        updateSelects();
+        updateInfo();
+        document.getElementById("resultBox").textContent = "Añade nodos y aristas para empezar";
+        document.getElementById("resultBox").className = "result-box clear";
+        draw();
+    }
+
+    function resetColors() {
+        for (var i = 0; i < nodes.length; i++) { nodes[i].color = COLORS.normal; nodes[i].label = ""; }
+    }
+
+    // ═══════════════════════════════════════════════
+    // CYCLE DETECTION (DFS 3-color animated)
+    // ═══════════════════════════════════════════════
+
+    async function detectCycles() {
+        resetColors(); draw();
+        var adj = {};
+        for (var i = 0; i < nodes.length; i++) adj[nodes[i].id] = [];
+        for (var i = 0; i < edges.length; i++) {
+            if (adj[edges[i].from]) adj[edges[i].from].push(edges[i].to);
+        }
+
+        var WHITE = 0, GRAY = 1, BLACK = 2;
+        var color = {};
+        for (var i = 0; i < nodes.length; i++) color[nodes[i].id] = WHITE;
+        var cyclePath = [];
+        var parent = {};
+        var found = false;
+
+        async function dfs(node) {
+            if (found) return;
+            color[node] = GRAY;
+            setNodeColor(node, COLORS.gray, "GRAY");
+            draw(); await sleep(300);
+
+            var neighbors = adj[node] || [];
+            for (var i = 0; i < neighbors.length; i++) {
+                var nb = neighbors[i];
+                if (found) return;
+                if (color[nb] === GRAY) {
+                    // Cycle found
+                    found = true;
+                    cyclePath = [nb];
+                    var cur = node;
+                    while (cur !== nb) { cyclePath.push(cur); cur = parent[cur]; if (!cur) break; }
+                    cyclePath.push(nb);
+                    cyclePath.reverse();
+                    // Color cycle nodes
+                    for (var j = 0; j < cyclePath.length; j++) setNodeColor(cyclePath[j], COLORS.cycle, "CICLO");
+                    draw();
+                    return;
+                }
+                if (color[nb] === WHITE) {
+                    parent[nb] = node;
+                    await dfs(nb);
+                }
+            }
+            if (!found) {
+                color[node] = BLACK;
+                setNodeColor(node, COLORS.done, "DONE");
+                draw(); await sleep(150);
+            }
+        }
+
+        for (var i = 0; i < nodes.length; i++) {
+            if (color[nodes[i].id] === WHITE && !found) {
+                await dfs(nodes[i].id);
+            }
+        }
+
+        var box = document.getElementById("resultBox");
+        if (found) {
+            box.textContent = "⚠️ Ciclo encontrado: " + cyclePath.join("→");
+            box.className = "result-box cycle";
+        } else {
+            box.textContent = "✅ Sin ciclos detectados";
+            box.className = "result-box clear";
+        }
+    }
+
+    function topoSort() {
+        resetColors(); draw();
+        var adj = {};
+        var inDeg = {};
+        for (var i = 0; i < nodes.length; i++) { adj[nodes[i].id] = []; inDeg[nodes[i].id] = 0; }
+        for (var i = 0; i < edges.length; i++) {
+            adj[edges[i].from].push(edges[i].to);
+            inDeg[edges[i].to] = (inDeg[edges[i].to] || 0) + 1;
+        }
+
+        var queue = [];
+        for (var id in inDeg) { if (inDeg[id] === 0) queue.push(id); }
+        queue.sort();
+        var result = [];
+        var order = 1;
+
+        while (queue.length > 0) {
+            var n = queue.shift();
+            result.push(n);
+            setNodeColor(n, COLORS.done, "" + order);
+            order++;
+            var neighbors = adj[n] || [];
+            for (var i = 0; i < neighbors.length; i++) {
+                inDeg[neighbors[i]]--;
+                if (inDeg[neighbors[i]] === 0) { queue.push(neighbors[i]); queue.sort(); }
+            }
+        }
+
+        draw();
+        var box = document.getElementById("resultBox");
+        if (result.length !== nodes.length) {
+            box.textContent = "⚠️ Imposible: hay ciclo. No se puede ordenar topológicamente.";
+            box.className = "result-box cycle";
+        } else {
+            box.textContent = "📊 Orden topológico: " + result.join(" → ");
+            box.className = "result-box clear";
+        }
+    }
+
+    function setNodeColor(id, color, label) {
+        var n = nodes.find(function(n) { return n.id === id; });
+        if (n) { n.color = color; n.label = label || ""; }
+    }
+
+    function sleep(ms) { return new Promise(function(r) { setTimeout(r, ms); }); }
+
+    // ═══════════════════════════════════════════════
+    // DRAWING
+    // ═══════════════════════════════════════════════
+
+    function draw() {
+        if (!canvas.width) return;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // Edges
+        for (var i = 0; i < edges.length; i++) {
+            var fromN = nodes.find(function(n) { return n.id === edges[i].from; });
+            var toN = nodes.find(function(n) { return n.id === edges[i].to; });
+            if (!fromN || !toN) continue;
+            drawArrow(fromN.x, fromN.y, toN.x, toN.y, fromN.color === COLORS.cycle && toN.color === COLORS.cycle ? COLORS.cycle : "#475569");
+        }
+
+        // Nodes
+        for (var i = 0; i < nodes.length; i++) {
+            var n = nodes[i];
+            // Glow
+            ctx.beginPath();
+            ctx.arc(n.x, n.y, NODE_R + 6, 0, Math.PI * 2);
+            ctx.fillStyle = n.color + "22";
+            ctx.fill();
+            // Circle
+            ctx.beginPath();
+            ctx.arc(n.x, n.y, NODE_R, 0, Math.PI * 2);
+            ctx.fillStyle = n.color;
+            ctx.fill();
+            ctx.strokeStyle = "#0a0e1a";
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            // Label
+            ctx.fillStyle = "#fff";
+            ctx.font = "bold 14px 'Segoe UI',sans-serif";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText(n.id, n.x, n.y);
+            // Status label
+            if (n.label) {
+                ctx.font = "bold 10px 'Fira Code',monospace";
+                ctx.fillStyle = n.color;
+                ctx.fillText(n.label, n.x, n.y + NODE_R + 14);
+            }
+        }
+    }
+
+    function drawArrow(x1, y1, x2, y2, color) {
+        var dx = x2 - x1, dy = y2 - y1;
+        var len = Math.sqrt(dx * dx + dy * dy);
+        if (len < 1) return;
+        var ux = dx / len, uy = dy / len;
+
+        // Shorten to node radius
+        var sx = x1 + ux * NODE_R, sy = y1 + uy * NODE_R;
+        var ex = x2 - ux * (NODE_R + 6), ey = y2 - uy * (NODE_R + 6);
+
+        // Self-loop
+        if (x1 === x2 && y1 === y2) {
+            ctx.beginPath();
+            ctx.arc(x1 + NODE_R + 10, y1 - NODE_R - 10, 18, 0, Math.PI * 2);
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            return;
+        }
+
+        ctx.beginPath();
+        ctx.moveTo(sx, sy);
+        ctx.lineTo(ex, ey);
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // Arrowhead
+        var headLen = 10;
+        var angle = Math.atan2(ey - sy, ex - sx);
+        ctx.beginPath();
+        ctx.moveTo(ex, ey);
+        ctx.lineTo(ex - headLen * Math.cos(angle - 0.4), ey - headLen * Math.sin(angle - 0.4));
+        ctx.lineTo(ex - headLen * Math.cos(angle + 0.4), ey - headLen * Math.sin(angle + 0.4));
+        ctx.closePath();
+        ctx.fillStyle = color;
+        ctx.fill();
+    }
+
+    // ═══════════════════════════════════════════════
+    // DRAG & DROP
+    // ═══════════════════════════════════════════════
+
+    canvas.addEventListener("mousedown", function(e) {
+        var rect = canvas.getBoundingClientRect();
+        var mx = e.clientX - rect.left, my = e.clientY - rect.top;
+        for (var i = nodes.length - 1; i >= 0; i--) {
+            var dx = mx - nodes[i].x, dy = my - nodes[i].y;
+            if (dx * dx + dy * dy <= NODE_R * NODE_R) {
+                dragging = nodes[i];
+                dragOff = { x: dx, y: dy };
+                return;
+            }
+        }
+    });
+
+    canvas.addEventListener("mousemove", function(e) {
+        if (!dragging) return;
+        var rect = canvas.getBoundingClientRect();
+        dragging.x = e.clientX - rect.left - dragOff.x;
+        dragging.y = e.clientY - rect.top - dragOff.y;
+        draw();
+    });
+
+    canvas.addEventListener("mouseup", function() { dragging = null; });
+    canvas.addEventListener("mouseleave", function() { dragging = null; });
+
+    // Touch support
+    canvas.addEventListener("touchstart", function(e) {
+        var t = e.touches[0]; var rect = canvas.getBoundingClientRect();
+        var mx = t.clientX - rect.left, my = t.clientY - rect.top;
+        for (var i = nodes.length - 1; i >= 0; i--) {
+            var dx = mx - nodes[i].x, dy = my - nodes[i].y;
+            if (dx * dx + dy * dy <= NODE_R * NODE_R) { dragging = nodes[i]; dragOff = { x: dx, y: dy }; e.preventDefault(); return; }
+        }
+    }, { passive: false });
+    canvas.addEventListener("touchmove", function(e) {
+        if (!dragging) return; e.preventDefault();
+        var t = e.touches[0]; var rect = canvas.getBoundingClientRect();
+        dragging.x = t.clientX - rect.left - dragOff.x; dragging.y = t.clientY - rect.top - dragOff.y; draw();
+    }, { passive: false });
+    canvas.addEventListener("touchend", function() { dragging = null; });
+
+    // ═══════════════════════════════════════════════
+    // UI HELPERS
+    // ═══════════════════════════════════════════════
+
+    function updateSelects() {
+        var html = "";
+        for (var i = 0; i < nodes.length; i++) html += '<option value="' + nodes[i].id + '">' + nodes[i].id + '</option>';
+        document.getElementById("fromNode").innerHTML = html;
+        document.getElementById("toNode").innerHTML = html;
+    }
+
+    function updateInfo() {
+        document.getElementById("nodeCount").textContent = nodes.length;
+        document.getElementById("edgeCount").textContent = edges.length;
+        var nl = document.getElementById("nodeList");
+        nl.innerHTML = nodes.length === 0 ? "—" : nodes.map(function(n) { return '<span>' + n.id + '</span>'; }).join(" ");
+        var el = document.getElementById("edgeList");
+        el.innerHTML = edges.length === 0 ? "—" : edges.map(function(e) { return '<span>' + e.from + '→' + e.to + '</span>'; }).join(" ");
+    }
+
+    // Init
+    setTimeout(function() { resizeCanvas(); loadExample(); }, 100);
+</script>
+</body>
+</html>

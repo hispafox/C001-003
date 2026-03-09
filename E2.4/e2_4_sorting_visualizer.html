@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>E2.4 — Visualizador de Algoritmos de Ordenación</title>
+    <style>
+        *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+        body{font-family:'Segoe UI',system-ui,sans-serif;background:#0a0e1a;color:#e2e8f0;min-height:100vh;display:flex;flex-direction:column;overflow-x:hidden}
+
+        .controls{background:#131a2e;padding:12px 20px;border-bottom:1px solid #1e2d4a;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+        .controls h1{font-size:18px;margin-right:8px;white-space:nowrap;background:linear-gradient(135deg,#60a5fa,#a78bfa);-webkit-background-clip:text;-webkit-text-fill-color:transparent;font-weight:800}
+        .ctrl-group{display:flex;align-items:center;gap:6px}
+        .ctrl-group label{font-size:12px;color:#64748b;white-space:nowrap}
+        .ctrl-group select{background:#0f172a;color:#e2e8f0;border:1px solid #334155;border-radius:6px;padding:6px 10px;font-size:13px;outline:none}
+        .ctrl-group input[type=range]{-webkit-appearance:none;background:#1e293b;height:6px;border-radius:3px;outline:none;width:80px}
+        .ctrl-group input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:#3b82f6;cursor:pointer;box-shadow:0 0 8px rgba(59,130,246,.5)}
+        .ctrl-val{font-size:12px;color:#60a5fa;font-weight:700;min-width:24px;text-align:center}
+        .btn{background:#1e293b;color:#94a3b8;border:1px solid #334155;border-radius:8px;padding:8px 16px;font-size:13px;cursor:pointer;transition:all .2s;font-weight:600}
+        .btn:hover{border-color:#3b82f6;color:#e2e8f0;box-shadow:0 0 12px rgba(59,130,246,.2)}
+        .btn-go{background:linear-gradient(135deg,#3b82f6,#8b5cf6);border:none;color:white}
+        .btn-go:hover{box-shadow:0 0 20px rgba(59,130,246,.4);transform:translateY(-1px)}
+        .btn:disabled{opacity:.3;cursor:default;transform:none;box-shadow:none}
+
+        .stats-bar{background:#0f1629;padding:10px 20px;border-bottom:1px solid #1e2d4a;display:flex;gap:28px;font-size:13px;flex-wrap:wrap}
+        .stat-item{display:flex;align-items:center;gap:6px}
+        .stat-label{color:#475569}
+        .stat-val{color:#60a5fa;font-weight:700;font-family:'Fira Code',monospace;font-size:14px}
+
+        /* Canvas */
+        .canvas-area{position:relative;overflow:hidden;background:radial-gradient(ellipse at 50% 100%,#0f1a3a 0%,#0a0e1a 70%);height:420px}
+        .canvas-area::before{content:'';position:absolute;inset:0;background:
+            repeating-linear-gradient(0deg,transparent,transparent 59px,rgba(30,45,74,.3) 59px,rgba(30,45,74,.3) 60px);
+            pointer-events:none}
+
+        .bars-wrapper{position:absolute;bottom:0;left:0;right:0;display:flex;align-items:flex-end;padding:0 12px;gap:2px}
+
+        .bar{position:relative;flex:1;min-width:3px;border-radius:3px 3px 0 0;transition:height .05s ease-out}
+        .bar::after{content:'';position:absolute;top:0;left:0;right:0;height:6px;border-radius:3px 3px 0 0;background:rgba(255,255,255,.35)}
+
+        .bar.default{background:linear-gradient(to top,#1e40af,#3b82f6,#60a5fa)}
+        .bar.comparing{background:linear-gradient(to top,#991b1b,#ef4444,#fca5a5);box-shadow:0 0 14px rgba(239,68,68,.5);animation:pulse .35s ease-in-out infinite}
+        .bar.sorted{background:linear-gradient(to top,#166534,#22c55e,#86efac)}
+        .bar.pivot{background:linear-gradient(to top,#854d0e,#eab308,#fde047);box-shadow:0 0 16px rgba(234,179,8,.5)}
+        .bar.swapping{background:linear-gradient(to top,#9a3412,#f97316,#fdba74);box-shadow:0 0 12px rgba(249,115,22,.5)}
+
+        @keyframes pulse{0%,100%{box-shadow:0 0 8px rgba(239,68,68,.3)}50%{box-shadow:0 0 22px rgba(239,68,68,.7)}}
+
+        /* Legend */
+        .legend{display:flex;gap:16px;flex-wrap:wrap;padding:8px 20px;background:#0f1629;border-top:1px solid #1e2d4a;font-size:12px;color:#94a3b8}
+        .legend-item{display:flex;align-items:center;gap:6px}
+        .legend-dot{width:14px;height:14px;border-radius:3px}
+
+        /* Info */
+        .info-panel{background:#131a2e;border-top:1px solid #1e2d4a;padding:16px 20px;display:flex;gap:24px;flex-wrap:wrap}
+        .info-block{flex:1;min-width:200px}
+        .info-block h3{font-size:11px;color:#475569;margin-bottom:8px;text-transform:uppercase;letter-spacing:1px}
+        .info-block p{font-size:13px;line-height:1.6;color:#94a3b8}
+        .complexity-table{font-size:13px}
+        .complexity-table td{padding:3px 10px}
+        .complexity-table td:first-child{color:#475569}
+        .complexity-table td:last-child{font-family:'Fira Code',monospace;color:#60a5fa;font-weight:600}
+
+        @media(max-width:700px){.controls{flex-direction:column;align-items:stretch}.info-panel{flex-direction:column}.canvas-area{height:300px}}
+    </style>
+</head>
+<body>
+
+<div class="controls">
+    <h1>SORTING VISUALIZER</h1>
+    <div class="ctrl-group">
+        <label>Algoritmo:</label>
+        <select id="algoSelect" onchange="updateInfo()">
+            <option value="bubble">Bubble Sort</option>
+            <option value="selection">Selection Sort</option>
+            <option value="insertion">Insertion Sort</option>
+            <option value="quick">Quick Sort</option>
+        </select>
+    </div>
+    <div class="ctrl-group">
+        <label>Velocidad:</label>
+        <input type="range" id="speedSlider" min="1" max="100" value="70" oninput="updateSpeed()">
+        <span class="ctrl-val" id="speedVal">70</span>
+    </div>
+    <div class="ctrl-group">
+        <label>Barras:</label>
+        <input type="range" id="sizeSlider" min="15" max="100" value="50" oninput="document.getElementById('sizeVal').textContent=this.value">
+        <span class="ctrl-val" id="sizeVal">50</span>
+    </div>
+    <button class="btn" onclick="newArray()">🔀 Nuevo</button>
+    <button class="btn btn-go" id="btnSort" onclick="startSort()">▶ Ordenar</button>
+    <button class="btn" id="btnPause" onclick="togglePause()" disabled>⏸ Pausar</button>
+    <button class="btn" id="btnStep" onclick="doStep()" disabled>⏭ Paso</button>
+</div>
+
+<div class="stats-bar">
+    <div class="stat-item"><span class="stat-label">🔄 Comparaciones:</span><span class="stat-val" id="statComp">0</span></div>
+    <div class="stat-item"><span class="stat-label">↔️ Intercambios:</span><span class="stat-val" id="statSwap">0</span></div>
+    <div class="stat-item"><span class="stat-label">⏱️ Tiempo:</span><span class="stat-val" id="statTime">0.0s</span></div>
+    <div class="stat-item"><span class="stat-label">📊 Estado:</span><span class="stat-val" id="statStatus">Listo</span></div>
+</div>
+
+<div class="canvas-area" id="canvasArea">
+    <div class="bars-wrapper" id="barsWrapper"></div>
+</div>
+
+<div class="legend">
+    <div class="legend-item"><div class="legend-dot" style="background:linear-gradient(135deg,#1e40af,#60a5fa)"></div>Sin procesar</div>
+    <div class="legend-item"><div class="legend-dot" style="background:linear-gradient(135deg,#991b1b,#fca5a5)"></div>Comparando</div>
+    <div class="legend-item"><div class="legend-dot" style="background:linear-gradient(135deg,#9a3412,#fdba74)"></div>Intercambiando</div>
+    <div class="legend-item"><div class="legend-dot" style="background:linear-gradient(135deg,#854d0e,#fde047)"></div>Pivote</div>
+    <div class="legend-item"><div class="legend-dot" style="background:linear-gradient(135deg,#166534,#86efac)"></div>Ordenado</div>
+</div>
+
+<div class="info-panel">
+    <div class="info-block">
+        <h3 id="infoName">Bubble Sort</h3>
+        <p id="infoDesc">Compara pares adyacentes e intercambia si están desordenados.</p>
+    </div>
+    <div class="info-block">
+        <h3>Complejidad</h3>
+        <table class="complexity-table">
+            <tr><td>Mejor:</td><td id="infoBest">O(n)</td></tr>
+            <tr><td>Promedio:</td><td id="infoAvg">O(n²)</td></tr>
+            <tr><td>Peor:</td><td id="infoWorst">O(n²)</td></tr>
+            <tr><td>Espacio:</td><td id="infoSpace">O(1)</td></tr>
+            <tr><td>Estable:</td><td id="infoStable">Sí</td></tr>
+        </table>
+    </div>
+</div>
+
+<script>
+    var ALGO_INFO = {
+        bubble: { name: "Bubble Sort", desc: "Compara pares adyacentes e intercambia si están desordenados. Los valores grandes 'flotan' hacia arriba como burbujas.", best: "O(n)", avg: "O(n²)", worst: "O(n²)", space: "O(1)", stable: "Sí" },
+        selection: { name: "Selection Sort", desc: "Busca el mínimo del subarray no ordenado y lo coloca en su posición. Pocos intercambios, muchas comparaciones.", best: "O(n²)", avg: "O(n²)", worst: "O(n²)", space: "O(1)", stable: "No" },
+        insertion: { name: "Insertion Sort", desc: "Inserta cada elemento en su posición correcta, como ordenar cartas en la mano. Eficiente para arrays casi ordenados.", best: "O(n)", avg: "O(n²)", worst: "O(n²)", space: "O(1)", stable: "Sí" },
+        quick: { name: "Quick Sort", desc: "Divide y vencerás: elige un pivote, separa menores y mayores, recurre. El más usado en la práctica.", best: "O(n log n)", avg: "O(n log n)", worst: "O(n²)", space: "O(log n)", stable: "No" }
+    };
+
+    var arr = [];
+    var sorting = false, paused = false, stepMode = false, stepResolve = null, stopRequested = false;
+    var stats = { comparisons: 0, swaps: 0, startTime: 0 };
+    var delayMs = 30, timerInterval = null;
+    var sortedSet = {};
+    var CANVAS_H = 400;
+
+    function updateInfo() {
+        var a = document.getElementById("algoSelect").value, i = ALGO_INFO[a];
+        document.getElementById("infoName").textContent = i.name;
+        document.getElementById("infoDesc").textContent = i.desc;
+        document.getElementById("infoBest").textContent = i.best;
+        document.getElementById("infoAvg").textContent = i.avg;
+        document.getElementById("infoWorst").textContent = i.worst;
+        document.getElementById("infoSpace").textContent = i.space;
+        document.getElementById("infoStable").textContent = i.stable;
+    }
+
+    function updateSpeed() {
+        var v = parseInt(document.getElementById("speedSlider").value);
+        document.getElementById("speedVal").textContent = v;
+        delayMs = Math.max(1, Math.round(200 * Math.pow(0.95, v)));
+    }
+
+    function newArray() {
+        if (sorting) { stopRequested = true; return; }
+        var size = parseInt(document.getElementById("sizeSlider").value);
+        arr = [];
+        for (var i = 0; i < size; i++) arr.push(Math.random() * 0.9 + 0.1);
+        stats = { comparisons: 0, swaps: 0, startTime: 0 };
+        sortedSet = {};
+        CANVAS_H = document.getElementById("canvasArea").offsetHeight || 400;
+        buildBars();
+        updateStatsUI();
+        document.getElementById("statStatus").textContent = "Listo";
+    }
+
+    function buildBars() {
+        var w = document.getElementById("barsWrapper");
+        w.innerHTML = "";
+        for (var i = 0; i < arr.length; i++) {
+            var bar = document.createElement("div");
+            bar.className = "bar default";
+            bar.style.height = Math.round(arr[i] * (CANVAS_H - 16)) + "px";
+            w.appendChild(bar);
+        }
+    }
+
+    function paintBars(hl) {
+        var bars = document.getElementById("barsWrapper").children;
+        for (var i = 0; i < arr.length; i++) {
+            if (!bars[i]) continue;
+            bars[i].style.height = Math.round(arr[i] * (CANVAS_H - 16)) + "px";
+            var cls = "bar ";
+            if (sortedSet[i]) cls += "sorted";
+            else if (hl.pivot === i) cls += "pivot";
+            else if (hl.comparing && hl.comparing.indexOf(i) !== -1) cls += "comparing";
+            else if (hl.swapping && hl.swapping.indexOf(i) !== -1) cls += "swapping";
+            else cls += "default";
+            bars[i].className = cls;
+        }
+    }
+
+    function updateStatsUI() {
+        document.getElementById("statComp").textContent = stats.comparisons;
+        document.getElementById("statSwap").textContent = stats.swaps;
+    }
+    function updateTimer() {
+        if (stats.startTime) document.getElementById("statTime").textContent = ((Date.now() - stats.startTime) / 1000).toFixed(1) + "s";
+    }
+
+    function sleep() {
+        return new Promise(function(resolve) {
+            if (stopRequested) { resolve(); return; }
+            if (stepMode) { stepResolve = resolve; }
+            else if (paused) { var c = setInterval(function() { if (!paused || stopRequested) { clearInterval(c); resolve(); } }, 50); }
+            else { setTimeout(resolve, delayMs); }
+        });
+    }
+    function doStep() { if (stepResolve) { var r = stepResolve; stepResolve = null; r(); } }
+    function togglePause() {
+        if (stepMode) { stepMode = false; paused = false; document.getElementById("btnPause").textContent = "⏸ Pausar"; document.getElementById("btnStep").disabled = true; if (stepResolve) doStep(); }
+        else { paused = !paused; if (paused) { stepMode = true; document.getElementById("btnPause").textContent = "▶ Auto"; document.getElementById("btnStep").disabled = false; document.getElementById("statStatus").textContent = "Paso a paso"; } else { document.getElementById("btnPause").textContent = "⏸ Pausar"; document.getElementById("btnStep").disabled = true; document.getElementById("statStatus").textContent = "Ordenando..."; } }
+    }
+
+    async function bubbleSort() {
+        for (var i = arr.length - 1; i >= 0; i--) {
+            var sw = false;
+            for (var j = 0; j < i; j++) {
+                if (stopRequested) return;
+                stats.comparisons++; paintBars({ comparing: [j, j + 1] }); updateStatsUI(); await sleep();
+                if (arr[j] > arr[j + 1]) { var t = arr[j]; arr[j] = arr[j + 1]; arr[j + 1] = t; stats.swaps++; sw = true; paintBars({ swapping: [j, j + 1] }); updateStatsUI(); await sleep(); }
+            }
+            sortedSet[i] = true; paintBars({});
+            if (!sw) { for (var k = 0; k <= i; k++) sortedSet[k] = true; break; }
+        }
+        sortedSet[0] = true;
+    }
+
+    async function selectionSort() {
+        for (var i = 0; i < arr.length - 1; i++) {
+            var m = i;
+            for (var j = i + 1; j < arr.length; j++) { if (stopRequested) return; stats.comparisons++; paintBars({ comparing: [m, j] }); updateStatsUI(); await sleep(); if (arr[j] < arr[m]) m = j; }
+            if (m !== i) { var t = arr[i]; arr[i] = arr[m]; arr[m] = t; stats.swaps++; paintBars({ swapping: [i, m] }); updateStatsUI(); await sleep(); }
+            sortedSet[i] = true; paintBars({});
+        }
+        sortedSet[arr.length - 1] = true;
+    }
+
+    async function insertionSort() {
+        sortedSet[0] = true;
+        for (var i = 1; i < arr.length; i++) {
+            var key = arr[i], j = i - 1;
+            paintBars({ comparing: [i] }); updateStatsUI(); await sleep();
+            while (j >= 0 && arr[j] > key) { if (stopRequested) return; stats.comparisons++; stats.swaps++; arr[j + 1] = arr[j]; paintBars({ swapping: [j, j + 1] }); updateStatsUI(); await sleep(); j--; }
+            if (j >= 0) stats.comparisons++;
+            arr[j + 1] = key; sortedSet[i] = true; paintBars({}); await sleep();
+        }
+    }
+
+    async function quickSort() { await qs(0, arr.length - 1); }
+    async function qs(lo, hi) {
+        if (lo >= hi || stopRequested) { if (lo === hi) sortedSet[lo] = true; return; }
+        var p = await qsP(lo, hi); if (stopRequested) return;
+        sortedSet[p] = true; paintBars({}); await qs(lo, p - 1); await qs(p + 1, hi);
+    }
+    async function qsP(lo, hi) {
+        var pv = arr[hi], i = lo - 1;
+        for (var j = lo; j < hi; j++) {
+            if (stopRequested) return lo;
+            stats.comparisons++; paintBars({ comparing: [j], pivot: hi }); updateStatsUI(); await sleep();
+            if (arr[j] <= pv) { i++; var t = arr[i]; arr[i] = arr[j]; arr[j] = t; stats.swaps++; paintBars({ swapping: [i, j], pivot: hi }); updateStatsUI(); await sleep(); }
+        }
+        var t = arr[i + 1]; arr[i + 1] = arr[hi]; arr[hi] = t; stats.swaps++;
+        return i + 1;
+    }
+
+    async function startSort() {
+        if (sorting) return;
+        sorting = true; paused = false; stepMode = false; stopRequested = false; sortedSet = {};
+        stats = { comparisons: 0, swaps: 0, startTime: Date.now() };
+        document.getElementById("btnSort").disabled = true;
+        document.getElementById("btnPause").disabled = false;
+        document.getElementById("statStatus").textContent = "Ordenando...";
+        timerInterval = setInterval(updateTimer, 100);
+
+        var algo = document.getElementById("algoSelect").value;
+        if (algo === "bubble") await bubbleSort();
+        else if (algo === "selection") await selectionSort();
+        else if (algo === "insertion") await insertionSort();
+        else if (algo === "quick") await quickSort();
+
+        clearInterval(timerInterval); updateTimer();
+        if (!stopRequested) {
+            // Wave completion
+            var bars = document.getElementById("barsWrapper").children;
+            for (var i = 0; i < arr.length; i++) {
+                sortedSet[i] = true;
+                if (bars[i]) { bars[i].className = "bar sorted"; bars[i].style.boxShadow = "0 0 20px rgba(34,197,94,.5)"; }
+                await new Promise(function(r) { setTimeout(r, 12); });
+            }
+            document.getElementById("statStatus").textContent = "✅ Completado";
+        } else { document.getElementById("statStatus").textContent = "Detenido"; }
+
+        sorting = false; stopRequested = false;
+        document.getElementById("btnSort").disabled = false;
+        document.getElementById("btnPause").disabled = true;
+        document.getElementById("btnStep").disabled = true;
+        document.getElementById("btnPause").textContent = "⏸ Pausar";
+    }
+
+    window.addEventListener("resize", function() { CANVAS_H = document.getElementById("canvasArea").offsetHeight || 400; if (!sorting) paintBars({}); });
+    updateSpeed(); updateInfo(); newArray();
+</script>
+
+</body>
+</html>
