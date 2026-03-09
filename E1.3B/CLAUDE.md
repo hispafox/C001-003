@@ -83,3 +83,25 @@ Ejercicio práctico del módulo 4 del curso «IA Generativa para el Desarrollo: 
 - CSS con custom properties (variables) para colores y valores reutilizables.
 - JavaScript modular con funciones bien nombradas.
 - No usar APIs experimentales del navegador.
+
+## Changelog Automático
+
+**OBLIGATORIO**: Antes de cada commit, actualizar `CHANGELOG.md` con los cambios realizados.
+
+### Formato del Changelog
+- Seguir formato [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/).
+- Agrupar entradas por fecha `[YYYY-MM-DD]`.
+- Usar categorías: `Añadido`, `Cambiado`, `Corregido`, `Eliminado`.
+- Cada entrada debe ser una línea concisa describiendo el cambio desde la perspectiva del usuario.
+- Incluir `CHANGELOG.md` en el staging (`git add`) junto con los demás archivos del commit.
+
+### Ejemplo
+```markdown
+## [2026-03-09]
+
+### Añadido
+- Filtro por prioridad en el header del tablero
+
+### Corregido
+- Tarjetas nuevas no se guardaban al crearlas desde el formulario
+```

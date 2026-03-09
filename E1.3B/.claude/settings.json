@@ -1,0 +1,11 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hook": "bash -c \"if echo \\\"$CLAUDE_TOOL_INPUT\\\" | grep -q 'git commit'; then if ! git diff --cached --name-only 2>/dev/null | grep -q 'CHANGELOG.md'; then echo 'CHANGELOG.md no está incluido en el commit. Recuerda actualizarlo con los cambios realizados.' >&2; fi; fi\"",
+        "description": "Recordar actualizar CHANGELOG.md antes de cada commit"
+      }
+    ]
+  }
+}
