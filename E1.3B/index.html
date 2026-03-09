@@ -1,0 +1,822 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tablero Kanban Interactivo</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.6/Sortable.min.js"></script>
+    <style>
+        /* ========== Variables CSS ========== */
+        :root {
+            --bg-primary: #0D1117;
+            --bg-secondary: #161B22;
+            --bg-card: #21262D;
+            --text-primary: #E6EDF3;
+            --text-secondary: #8B949E;
+            --priority-high: #F85149;
+            --priority-medium: #D29922;
+            --priority-low: #3FB950;
+            --accent: #58A6FF;
+            --border: #30363D;
+            --shadow: rgba(0, 0, 0, 0.3);
+            --radius: 8px;
+            --transition: 0.2s ease;
+        }
+
+        /* ========== Reset & Base ========== */
+        *, *::before, *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* ========== Header ========== */
+        .header {
+            background-color: var(--bg-secondary);
+            border-bottom: 1px solid var(--border);
+            padding: 16px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 12px;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .header h1 {
+            font-size: 1.4rem;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .header-controls {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        /* ========== Botones ========== */
+        .btn {
+            padding: 8px 16px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background-color: var(--bg-card);
+            color: var(--text-primary);
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: background-color var(--transition), border-color var(--transition);
+        }
+
+        .btn:hover {
+            background-color: var(--border);
+        }
+
+        .btn-primary {
+            background-color: var(--accent);
+            border-color: var(--accent);
+            color: #fff;
+            font-weight: 600;
+        }
+
+        .btn-primary:hover {
+            background-color: #4090e0;
+            border-color: #4090e0;
+        }
+
+        .btn-danger {
+            color: var(--priority-high);
+            border-color: var(--priority-high);
+            background-color: transparent;
+        }
+
+        .btn-danger:hover {
+            background-color: rgba(248, 81, 73, 0.15);
+        }
+
+        /* ========== Filtro de prioridad ========== */
+        .filter-select {
+            padding: 8px 12px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background-color: var(--bg-card);
+            color: var(--text-primary);
+            font-size: 0.85rem;
+            cursor: pointer;
+        }
+
+        .filter-select:focus {
+            outline: 2px solid var(--accent);
+            outline-offset: 1px;
+        }
+
+        /* ========== Tablero ========== */
+        .board {
+            display: flex;
+            gap: 20px;
+            padding: 24px;
+            flex: 1;
+            overflow-x: auto;
+            align-items: flex-start;
+        }
+
+        /* ========== Columnas ========== */
+        .column {
+            background-color: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            min-width: 300px;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            max-height: calc(100vh - 140px);
+        }
+
+        .column-header {
+            padding: 16px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .column-title {
+            font-size: 0.95rem;
+            font-weight: 600;
+        }
+
+        .column-count {
+            background-color: var(--bg-card);
+            color: var(--text-secondary);
+            font-size: 0.75rem;
+            font-weight: 600;
+            padding: 2px 8px;
+            border-radius: 12px;
+            min-width: 24px;
+            text-align: center;
+        }
+
+        .column-cards {
+            padding: 12px;
+            flex: 1;
+            overflow-y: auto;
+            min-height: 80px;
+        }
+
+        /* ========== Tarjetas ========== */
+        .card {
+            background-color: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 14px;
+            margin-bottom: 10px;
+            cursor: grab;
+            transition: transform var(--transition), box-shadow var(--transition);
+            position: relative;
+        }
+
+        .card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px var(--shadow);
+        }
+
+        .card:active {
+            cursor: grabbing;
+        }
+
+        .card.sortable-ghost {
+            opacity: 0.4;
+        }
+
+        .card.sortable-chosen {
+            box-shadow: 0 8px 24px var(--shadow);
+        }
+
+        .card-title {
+            font-size: 0.95rem;
+            font-weight: 600;
+            margin-bottom: 6px;
+            color: var(--text-primary);
+            cursor: pointer;
+            padding: 2px 4px;
+            border-radius: 4px;
+            transition: background-color var(--transition);
+        }
+
+        .card-title:hover {
+            background-color: rgba(255, 255, 255, 0.05);
+        }
+
+        .card-title-input {
+            font-size: 0.95rem;
+            font-weight: 600;
+            width: 100%;
+            padding: 2px 4px;
+            border: 1px solid var(--accent);
+            border-radius: 4px;
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            outline: none;
+            margin-bottom: 6px;
+        }
+
+        .card-description {
+            font-size: 0.82rem;
+            color: var(--text-secondary);
+            margin-bottom: 10px;
+            line-height: 1.4;
+        }
+
+        .card-footer {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .card-meta {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        /* ========== Badge de prioridad ========== */
+        .badge {
+            font-size: 0.7rem;
+            font-weight: 600;
+            padding: 3px 8px;
+            border-radius: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .badge-alta {
+            background-color: rgba(248, 81, 73, 0.15);
+            color: var(--priority-high);
+        }
+
+        .badge-media {
+            background-color: rgba(210, 153, 34, 0.15);
+            color: var(--priority-medium);
+        }
+
+        .badge-baja {
+            background-color: rgba(63, 185, 80, 0.15);
+            color: var(--priority-low);
+        }
+
+        .card-date {
+            font-size: 0.72rem;
+            color: var(--text-secondary);
+        }
+
+        .card-delete {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 1rem;
+            padding: 4px;
+            border-radius: 4px;
+            opacity: 0;
+            transition: opacity var(--transition), color var(--transition), background-color var(--transition);
+        }
+
+        .card:hover .card-delete {
+            opacity: 1;
+        }
+
+        .card-delete:hover {
+            color: var(--priority-high);
+            background-color: rgba(248, 81, 73, 0.1);
+        }
+
+        .card-delete.confirm {
+            opacity: 1;
+            color: #fff;
+            background-color: var(--priority-high);
+        }
+
+        /* ========== Formulario ========== */
+        .form-toggle {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            background-color: var(--accent);
+            color: #fff;
+            border: none;
+            font-size: 1.8rem;
+            cursor: pointer;
+            box-shadow: 0 4px 16px rgba(88, 166, 255, 0.4);
+            transition: transform var(--transition), box-shadow var(--transition);
+            z-index: 200;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .form-toggle:hover {
+            transform: scale(1.1);
+            box-shadow: 0 6px 20px rgba(88, 166, 255, 0.5);
+        }
+
+        .form-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background-color: rgba(0, 0, 0, 0.6);
+            z-index: 300;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .form-overlay.active {
+            display: flex;
+        }
+
+        .form-panel {
+            background-color: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 28px;
+            width: 100%;
+            max-width: 420px;
+            margin: 20px;
+        }
+
+        .form-panel h2 {
+            font-size: 1.15rem;
+            margin-bottom: 20px;
+            color: var(--text-primary);
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 0.82rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            margin-bottom: 6px;
+        }
+
+        .form-group input,
+        .form-group textarea,
+        .form-group select {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            font-size: 0.9rem;
+            font-family: inherit;
+            transition: border-color var(--transition);
+        }
+
+        .form-group input:focus,
+        .form-group textarea:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        .form-group textarea {
+            resize: vertical;
+            min-height: 70px;
+        }
+
+        .form-group .error-msg {
+            color: var(--priority-high);
+            font-size: 0.78rem;
+            margin-top: 4px;
+            display: none;
+        }
+
+        .form-actions {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+            margin-top: 20px;
+        }
+
+        /* ========== Scrollbar ========== */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--border);
+            border-radius: 3px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--text-secondary);
+        }
+
+        /* ========== Card hidden por filtro ========== */
+        .card.hidden {
+            display: none;
+        }
+
+        /* ========== Responsive ========== */
+        @media (max-width: 960px) {
+            .board {
+                padding: 16px;
+                gap: 14px;
+            }
+
+            .column {
+                min-width: 260px;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .header {
+                padding: 12px 16px;
+            }
+
+            .header h1 {
+                font-size: 1.1rem;
+            }
+
+            .board {
+                padding: 12px;
+            }
+
+            .column {
+                min-width: 240px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Header -->
+    <header class="header">
+        <h1>📋 Tablero Kanban</h1>
+        <div class="header-controls">
+            <label for="filter" style="font-size:0.85rem;color:var(--text-secondary)">Filtrar:</label>
+            <select id="filter" class="filter-select" aria-label="Filtrar por prioridad">
+                <option value="todas">Todas</option>
+                <option value="alta">Alta</option>
+                <option value="media">Media</option>
+                <option value="baja">Baja</option>
+            </select>
+            <button id="btn-reset" class="btn btn-danger">Reiniciar tablero</button>
+        </div>
+    </header>
+
+    <!-- Tablero -->
+    <main class="board">
+        <section class="column" data-column="todo">
+            <div class="column-header">
+                <span class="column-title">Por Hacer</span>
+                <span class="column-count" id="count-todo">0</span>
+            </div>
+            <div class="column-cards" id="col-todo"></div>
+        </section>
+
+        <section class="column" data-column="progress">
+            <div class="column-header">
+                <span class="column-title">En Progreso</span>
+                <span class="column-count" id="count-progress">0</span>
+            </div>
+            <div class="column-cards" id="col-progress"></div>
+        </section>
+
+        <section class="column" data-column="done">
+            <div class="column-header">
+                <span class="column-title">Completado</span>
+                <span class="column-count" id="count-done">0</span>
+            </div>
+            <div class="column-cards" id="col-done"></div>
+        </section>
+    </main>
+
+    <!-- Botón flotante para añadir tarjeta -->
+    <button class="form-toggle" id="btn-add" title="Añadir tarjeta" aria-label="Añadir tarjeta">+</button>
+
+    <!-- Modal formulario -->
+    <div class="form-overlay" id="form-overlay">
+        <div class="form-panel">
+            <h2>Nueva Tarjeta</h2>
+            <form id="card-form">
+                <div class="form-group">
+                    <label for="input-title">Título *</label>
+                    <input type="text" id="input-title" placeholder="Título de la tarjeta" required>
+                    <div class="error-msg" id="error-title">El título es obligatorio.</div>
+                </div>
+                <div class="form-group">
+                    <label for="input-desc">Descripción</label>
+                    <textarea id="input-desc" placeholder="Descripción opcional"></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="input-priority">Prioridad</label>
+                    <select id="input-priority">
+                        <option value="alta">Alta</option>
+                        <option value="media" selected>Media</option>
+                        <option value="baja">Baja</option>
+                    </select>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn" id="btn-cancel">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Crear Tarjeta</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // ========== Estado y constantes ==========
+        const STORAGE_KEY = 'kanban-board-data';
+
+        const INITIAL_CARDS = [
+            { id: generateId(), title: 'Configurar ESLint', description: 'Añadir reglas de linting al proyecto', priority: 'alta', column: 'todo', date: todayStr() },
+            { id: generateId(), title: 'Diseñar API REST', description: 'Definir endpoints y modelos de datos', priority: 'media', column: 'todo', date: todayStr() },
+            { id: generateId(), title: 'Implementar login', description: 'Autenticación con JWT y refresh tokens', priority: 'alta', column: 'progress', date: todayStr() },
+            { id: generateId(), title: 'Crear tests unitarios', description: 'Cobertura mínima del 80% con Jest', priority: 'media', column: 'progress', date: todayStr() },
+            { id: generateId(), title: 'Setup del repositorio', description: 'Inicializar repo con Git y estructura base', priority: 'baja', column: 'done', date: todayStr() },
+            { id: generateId(), title: 'Documentar README', description: 'Instrucciones de instalación y uso', priority: 'baja', column: 'done', date: todayStr() },
+        ];
+
+        const COLUMN_MAP = {
+            todo: 'col-todo',
+            progress: 'col-progress',
+            done: 'col-done',
+        };
+
+        let cards = [];
+
+        // ========== Utilidades ==========
+        function generateId() {
+            return 'card-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
+        }
+
+        function todayStr() {
+            return new Date().toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
+        }
+
+        // ========== Persistencia ==========
+        function save() {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(cards));
+        }
+
+        function syncOrderFromDOM() {
+            const ordered = [];
+            for (const [colKey, colId] of Object.entries(COLUMN_MAP)) {
+                const container = document.getElementById(colId);
+                container.querySelectorAll('.card').forEach(el => {
+                    const card = cards.find(c => c.id === el.dataset.id);
+                    if (card) {
+                        card.column = colKey;
+                        ordered.push({ ...card });
+                    }
+                });
+            }
+            cards = ordered;
+        }
+
+        function load() {
+            const data = localStorage.getItem(STORAGE_KEY);
+            if (data) {
+                try {
+                    cards = JSON.parse(data);
+                    return;
+                } catch { /* fallback a iniciales */ }
+            }
+            resetToInitial();
+        }
+
+        function resetToInitial() {
+            cards = INITIAL_CARDS.map(c => ({ ...c, id: generateId() }));
+            save();
+        }
+
+        // ========== Renderizado ==========
+        function render() {
+            const filter = document.getElementById('filter').value;
+
+            for (const [colKey, colId] of Object.entries(COLUMN_MAP)) {
+                const container = document.getElementById(colId);
+                container.innerHTML = '';
+
+                const colCards = cards.filter(c => c.column === colKey);
+                let visibleCount = 0;
+
+                colCards.forEach(card => {
+                    const hidden = filter !== 'todas' && card.priority !== filter;
+                    if (!hidden) visibleCount++;
+
+                    const el = document.createElement('div');
+                    el.className = 'card' + (hidden ? ' hidden' : '');
+                    el.dataset.id = card.id;
+                    el.innerHTML = `
+                        <button class="card-delete" title="Eliminar tarjeta">&times;</button>
+                        <div class="card-title">${escapeHtml(card.title)}</div>
+                        <div class="card-description">${escapeHtml(card.description)}</div>
+                        <div class="card-footer">
+                            <div class="card-meta">
+                                <span class="badge badge-${card.priority}">${card.priority}</span>
+                                <span class="card-date">${card.date}</span>
+                            </div>
+                        </div>
+                    `;
+                    container.appendChild(el);
+                });
+
+                document.getElementById(`count-${colKey === 'progress' ? 'progress' : colKey}`).textContent = visibleCount;
+            }
+        }
+
+        function escapeHtml(str) {
+            const div = document.createElement('div');
+            div.textContent = str || '';
+            return div.innerHTML;
+        }
+
+        // ========== Contadores ==========
+        function updateCounts() {
+            const filter = document.getElementById('filter').value;
+            for (const [colKey, colId] of Object.entries(COLUMN_MAP)) {
+                const container = document.getElementById(colId);
+                const visible = container.querySelectorAll('.card:not(.hidden)').length;
+                const countId = colKey === 'todo' ? 'count-todo' : colKey === 'progress' ? 'count-progress' : 'count-done';
+                document.getElementById(countId).textContent = visible;
+            }
+        }
+
+        // ========== Drag & Drop (SortableJS) ==========
+        function initSortable() {
+            Object.values(COLUMN_MAP).forEach(colId => {
+                const el = document.getElementById(colId);
+                Sortable.create(el, {
+                    group: 'kanban',
+                    animation: 150,
+                    ghostClass: 'sortable-ghost',
+                    chosenClass: 'sortable-chosen',
+                    dragClass: 'sortable-drag',
+                    onEnd() {
+                        syncOrderFromDOM();
+                        save();
+                        updateCounts();
+                    }
+                });
+            });
+        }
+
+        // ========== Edición inline del título ==========
+        document.addEventListener('dblclick', function (e) {
+            const titleEl = e.target.closest('.card-title');
+            if (!titleEl) return;
+
+            const cardEl = titleEl.closest('.card');
+            const card = cards.find(c => c.id === cardEl.dataset.id);
+            if (!card) return;
+
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.className = 'card-title-input';
+            input.value = card.title;
+            titleEl.replaceWith(input);
+            input.focus();
+            input.select();
+
+            function confirmEdit() {
+                const newTitle = input.value.trim();
+                if (newTitle) {
+                    card.title = newTitle;
+                    save();
+                }
+                render();
+            }
+
+            input.addEventListener('blur', confirmEdit);
+            input.addEventListener('keydown', function (ev) {
+                if (ev.key === 'Enter') {
+                    ev.preventDefault();
+                    input.blur();
+                }
+                if (ev.key === 'Escape') {
+                    input.value = card.title;
+                    input.blur();
+                }
+            });
+        });
+
+        // ========== Eliminar tarjeta con confirmación ==========
+        document.addEventListener('click', function (e) {
+            const btn = e.target.closest('.card-delete');
+            if (!btn) return;
+
+            if (btn.classList.contains('confirm')) {
+                const cardEl = btn.closest('.card');
+                const id = cardEl.dataset.id;
+                cards = cards.filter(c => c.id !== id);
+                save();
+                render();
+            } else {
+                btn.classList.add('confirm');
+                btn.title = 'Clic de nuevo para confirmar';
+                setTimeout(() => {
+                    btn.classList.remove('confirm');
+                    btn.title = 'Eliminar tarjeta';
+                }, 2000);
+            }
+        });
+
+        // ========== Formulario: añadir tarjeta ==========
+        const formOverlay = document.getElementById('form-overlay');
+        const cardForm = document.getElementById('card-form');
+
+        document.getElementById('btn-add').addEventListener('click', () => {
+            formOverlay.classList.add('active');
+            document.getElementById('input-title').focus();
+        });
+
+        document.getElementById('btn-cancel').addEventListener('click', closeForm);
+
+        formOverlay.addEventListener('click', function (e) {
+            if (e.target === formOverlay) closeForm();
+        });
+
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape' && formOverlay.classList.contains('active')) {
+                closeForm();
+            }
+        });
+
+        function closeForm() {
+            formOverlay.classList.remove('active');
+            cardForm.reset();
+            document.getElementById('error-title').style.display = 'none';
+        }
+
+        cardForm.addEventListener('submit', function (e) {
+            e.preventDefault();
+            const title = document.getElementById('input-title').value.trim();
+            const desc = document.getElementById('input-desc').value.trim();
+            const priority = document.getElementById('input-priority').value;
+
+            if (!title) {
+                document.getElementById('error-title').style.display = 'block';
+                return;
+            }
+
+            cards.push({
+                id: generateId(),
+                title,
+                description: desc,
+                priority,
+                column: 'todo',
+                date: todayStr(),
+            });
+
+            save();
+            render();
+            closeForm();
+        });
+
+        // ========== Filtro ==========
+        document.getElementById('filter').addEventListener('change', function () {
+            render();
+        });
+
+        // ========== Reiniciar tablero ==========
+        document.getElementById('btn-reset').addEventListener('click', function () {
+            if (confirm('¿Reiniciar el tablero? Se perderán todos los cambios.')) {
+                resetToInitial();
+                render();
+            }
+        });
+
+        // ========== Inicialización ==========
+        load();
+        render();
+        initSortable();
+    </script>
+</body>
+</html>
