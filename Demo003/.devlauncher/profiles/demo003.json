@@ -1,0 +1,29 @@
+{
+  "name": "Demo003",
+  "rootDirectory": "",
+  "chromePath": "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+  "chromeProfile": "C:\\Users\\hispa\\AppData\\Local\\Google\\Chrome\\User Data\\Demo003 Dev",
+  "startupTimeoutSeconds": 45,
+  "projects": [
+    {
+      "name": "API .NET (ProductsCrud)",
+      "workingDirectory": "ProductsCrud",
+      "command": "dotnet",
+      "arguments": "run --launch-profile https",
+      "url": "https://localhost:7272",
+      "healthCheckUrl": "https://localhost:7272",
+      "openUrl": "https://localhost:7272"
+    },
+    {
+      "name": "products-crud-frontend",
+      "workingDirectory": "products-crud-frontend",
+      "command": "cmd",
+      "arguments": "/c npm run dev",
+      "url": "http://localhost:5173",
+      "healthCheckUrl": "http://localhost:5173",
+      "openUrl": "http://localhost:5173"
+    }
+  ],
+  "createdAt": "2026-03-10T13:27:03.8302054+01:00",
+  "lastUsedAt": "2026-03-11T09:36:58.8691398+01:00"
+}
